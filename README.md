@@ -47,10 +47,10 @@ To manually install this Client:
 
 Feedback and contributions are welcome - if you have identified a bug, please log an issue on this repo. For all other feedback, discussion or questions please open a thread on our [discourse forum][discourse].
 
-| Contributing                              |
-|-------------------------------------------|
-| [![i3][contributing-image]][contributing] |
-| [Contributing][contributing]              |
+| Contributing                                 |
+|----------------------------------------------|
+| [![i3][contributing-image]](CONTRIBUTING.md) |
+| [Contributing](CONTRIBUTING.md)              |
 
 ## Copyright and license
 
@@ -84,7 +84,6 @@ limitations under the License.
 [setup]: https://docs.snowplowanalytics.com/docs/
 [setup-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/setup.png
 
-[contributing]: https://github.com/snowplow/snowplow-gtm-server-side-amplitude-tag/blob/master/CONTRIBUTING.md
 [contributing-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/contributing.png
 
 [snowplow-client]: https://github.com/snowplow/snowplow-gtm-server-side-client/
