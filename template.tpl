@@ -474,7 +474,6 @@ let insertId =
   eventData['x-sp-event_id'] || sha256Sync(eventData.event_name + eventData.client_id + makeString(getTimestampMillis()));
 let platform = eventData['x-sp-platform'] || data.fallbackPlatform;
 
-// https://developers.amplitude.com/docs/http-api-v2#properties-1
 let amplitudeEvent = {
   event_type: eventData.event_name,
   device_id: eventData.client_id,
@@ -489,7 +488,6 @@ let amplitudeEvent = {
   location_lng: eventData['x-sp-geo_longitude'],
   carrier: eventData['x-sp-ip_organization'],
   language: eventData.language,
-
   insert_id: insertId,
 };
 
@@ -594,24 +592,6 @@ ___SERVER_PERMISSIONS___
     },
     "clientAnnotations": {
       "isEditedByUser": true
-    },
-    "isRequired": true
-  },
-  {
-    "instance": {
-      "key": {
-        "publicId": "logging",
-        "versionId": "1"
-      },
-      "param": [
-        {
-          "key": "environments",
-          "value": {
-            "type": 1,
-            "string": "debug"
-          }
-        }
-      ]
     },
     "isRequired": true
   }
