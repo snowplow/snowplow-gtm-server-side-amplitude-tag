@@ -79,9 +79,9 @@ limitations under the License.
 [snowplow]: https://github.com/snowplow/snowplow
 [discourse]: https://discourse.snowplowanalytics.com
 
-[techdocs]: https://docs.snowplowanalytics.com/docs/
+[techdocs]: https://docs.snowplowanalytics.com/docs/forwarding-events-to-destinations/forwarding-events/google-tag-manager-server-side/amplitude-tag-for-gtm-ss/amplitude-tag-configuration/
 [techdocs-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/techdocs.png
-[setup]: https://docs.snowplowanalytics.com/docs/
+[setup]: https://docs.snowplowanalytics.com/docs/forwarding-events-to-destinations/forwarding-events/google-tag-manager-server-side/amplitude-tag-for-gtm-ss/
 [setup-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/setup.png
 
 [contributing-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/contributing.png

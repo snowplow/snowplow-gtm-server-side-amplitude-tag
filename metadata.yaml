@@ -1,5 +1,5 @@
 homepage: "https://www.snowplowanalytics.com"
-documentation: "https://docs.snowplowanalytics.com/docs"
+documentation: "https://docs.snowplowanalytics.com/docs/forwarding-events-to-destinations/forwarding-events/google-tag-manager-server-side/amplitude-tag-for-gtm-ss/"
 versions:
   # Latest version
   - sha: 91079e22b124c1e139af742f9593780f345a2114
