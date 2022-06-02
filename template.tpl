@@ -322,6 +322,11 @@ const sha256Sync = require('sha256Sync');
 const getTimestampMillis = require('getTimestampMillis');
 const makeString = require('makeString');
 
+// Constants
+const standardEndpoint = 'https://api2.amplitude.com/2/httpapi';
+const euEndpoint = 'https://api.eu.amplitude.com/2/httpapi';
+
+// Helpers
 const cleanObject = (obj) => {
   let target = {};
 
@@ -449,7 +454,7 @@ const parseCustomEventAndEntities = (eventData, eventProperties, userProperties)
   }
 };
 
-const url = data.useEUServer ? 'https://api.eu.amplitude.com/2/httpapi' : 'https://api.amplitude.com/2/httpapi';
+const url = data.useEUServer ? euEndpoint : standardEndpoint;
 
 const eventData = getAllEventData();
 
@@ -591,7 +596,7 @@ ___SERVER_PERMISSIONS___
             "listItem": [
               {
                 "type": 1,
-                "string": "https://api.amplitude.com/2/httpapi"
+                "string": "https://api2.amplitude.com/2/httpapi"
               },
               {
                 "type": 1,
@@ -617,7 +622,7 @@ scenarios:
   code: "// to assert on\nlet argUrl, argCallback, argOptions, argBody;\nmock('sendHttpRequest',\
     \ function() { \n  log(arguments);\n  argUrl = arguments[0];\n  argOptions = arguments[2];\n\
     \  argBody = arguments[3];\n});\n\n// Call runCode to run the template's code.a\n\
-    runCode(mockData);\n\n// Assert\nassertApi('sendHttpRequest').wasCalled();\nassertThat(argUrl).isStrictlyEqualTo('https://api.amplitude.com/2/httpapi');\n\
+    runCode(mockData);\n\n// Assert\nassertApi('sendHttpRequest').wasCalled();\nassertThat(argUrl).isStrictlyEqualTo('https://api2.amplitude.com/2/httpapi');\n\
     \nassertThat(argOptions.method).isStrictlyEqualTo('POST');\nassertThat(argOptions.timeout).isStrictlyEqualTo(5000);\n\
     assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo('application/json');\n\
     \nconst body = json.parse(argBody);\nassertThat(body).isEqualTo({\"api_key\":\"\
