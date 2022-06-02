@@ -42,6 +42,14 @@ ___TEMPLATE_PARAMETERS___
     "alwaysInSummary": false
   },
   {
+    "type": "CHECKBOX",
+    "name": "useEUServer",
+    "checkboxText": "Use Amplitude\u0027s EU servers",
+    "simpleValueType": true,
+    "defaultValue": false,
+    "help": "Enable this option to send the data to Amplitude\u0027s EU servers."
+  },
+  {
     "type": "GROUP",
     "name": "snowplowEventMapping",
     "displayName": "Snowplow Event Mapping Options",
@@ -441,7 +449,7 @@ const parseCustomEventAndEntities = (eventData, eventProperties, userProperties)
   }
 };
 
-const url = 'https://api.amplitude.com/2/httpapi';
+const url = data.useEUServer ? 'https://api.eu.amplitude.com/2/httpapi' : 'https://api.amplitude.com/2/httpapi';
 
 const eventData = getAllEventData();
 
@@ -584,6 +592,10 @@ ___SERVER_PERMISSIONS___
               {
                 "type": 1,
                 "string": "https://api.amplitude.com/2/httpapi"
+              },
+              {
+                "type": 1,
+                "string": "https://api.eu.amplitude.com/2/httpapi"
               }
             ]
           }
