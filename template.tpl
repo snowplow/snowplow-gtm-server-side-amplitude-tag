@@ -479,7 +479,7 @@ let amplitudeEvent = {
   device_id: eventData.client_id,
   ip: data.forwardIp ? eventData.ip_override : undefined,
   event_properties: eventProperties,
-  user_properies: userProperties,
+  user_properties: userProperties,
   platform: platform,
   country: eventData['x-sp-geo_country'],
   region: eventData['x-sp-geo_region'],
@@ -613,7 +613,7 @@ scenarios:
     ,\"event_properties\":{\"page_location\":\"https://snowplowanalytics.com/\",\"\
     page_encoding\":\"UTF-8\",\"page_referrer\":\"referer\",\"page_title\":\"Collect,\
     \ manage and operationalize behavioral data at scale | Snowplow\",\"screen_resolution\"\
-    :\"1920x1080\",\"viewport_size\":\"745x1302\"},\"user_properies\":{\"email_address\"\
+    :\"1920x1080\",\"viewport_size\":\"745x1302\"},\"user_properties\":{\"email_address\"\
     :\"test@example.com\"},\"language\":\"en-GB\",\"insert_id\":\"7e1e4208-054a-4acc-a83e-a9bca5e60bd0\"\
     ,\"user_id\":\"snow123\"}]});"
 setup: "const json = require('JSON');\nconst log = require('logToConsole');\n\nconst\
