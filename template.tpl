@@ -314,13 +314,13 @@ ___TEMPLATE_PARAMETERS___
 
 ___SANDBOXED_JS_FOR_SERVER___
 
-const getEventData = require('getEventData');
-const sendHttpRequest = require('sendHttpRequest');
-const JSON = require('JSON');
 const getAllEventData = require('getAllEventData');
-const sha256Sync = require('sha256Sync');
+const getEventData = require('getEventData');
 const getTimestampMillis = require('getTimestampMillis');
+const JSON = require('JSON');
 const makeString = require('makeString');
+const sendHttpRequest = require('sendHttpRequest');
+const sha256Sync = require('sha256Sync');
 
 // Constants
 const standardEndpoint = 'https://api2.amplitude.com/2/httpapi';
@@ -401,12 +401,21 @@ const toSnakeCase = (value) => {
 };
 
 const cleanPropertyName = (prop) => prop.replace('x-sp-', '');
-const extractFromArrayIfSingleElement = (arr) => (arr.length === 1 && data.extractFromArray ? arr[0] : arr);
+const extractFromArrayIfSingleElement = (arr) =>
+  arr.length === 1 && data.extractFromArray ? arr[0] : arr;
 const parseSchemaToMajorKeyValue = (schema) => {
   if (schema.indexOf('x-sp-contexts_') === 0) return schema;
   if (schema.indexOf('contexts_') === 0) return 'x-sp-' + schema;
   if (schema.indexOf('iglu:') === 0) {
-    let fixed = replaceAll(replaceAll(schema.replace('iglu:', '').replace('jsonschema/', ''), '.', '_'), '/', '_');
+    let fixed = replaceAll(
+      replaceAll(
+        schema.replace('iglu:', '').replace('jsonschema/', ''),
+        '.',
+        '_'
+      ),
+      '/',
+      '_'
+    );
 
     for (let i = 0; i < 2; i++) {
       fixed = fixed.substring(0, fixed.lastIndexOf('-'));
@@ -416,15 +425,23 @@ const parseSchemaToMajorKeyValue = (schema) => {
   return schema;
 };
 
-const parseCustomEventAndEntities = (eventData, eventProperties, userProperties) => {
+const parseCustomEventAndEntities = (
+  eventData,
+  eventProperties,
+  userProperties
+) => {
   for (let prop in eventData) {
     if (eventData.hasOwnProperty(prop)) {
-      if (data.includeSelfDescribingEvent && prop.indexOf('x-sp-self_describing_event_') === 0) {
+      if (
+        data.includeSelfDescribingEvent &&
+        prop.indexOf('x-sp-self_describing_event_') === 0
+      ) {
         eventProperties[cleanPropertyName(prop)] = eventData[prop];
       }
 
       if (data.includeAllEntities && prop.indexOf('x-sp-contexts_') === 0) {
-        eventProperties[cleanPropertyName(prop)] = extractFromArrayIfSingleElement(eventData[prop]);
+        eventProperties[cleanPropertyName(prop)] =
+          extractFromArrayIfSingleElement(eventData[prop]);
       } else if (prop.indexOf('x-sp-contexts_') === 0) {
         let mapped = false;
         for (let entityRule in data.entityMappingRules) {
@@ -437,9 +454,8 @@ const parseCustomEventAndEntities = (eventData, eventProperties, userProperties)
               rule.propertiesObjectToPopulate === 'event_properties' ? eventProperties : userProperties;
 
             if (prop === parsedSchemaKey) {
-              properties[rule.mappedKey || cleanPropertyName(parsedSchemaKey)] = extractFromArrayIfSingleElement(
-                eventData[prop]
-              );
+              properties[rule.mappedKey || cleanPropertyName(parsedSchemaKey)] =
+                extractFromArrayIfSingleElement(eventData[prop]);
               mapped = true;
               break;
             }
@@ -447,7 +463,8 @@ const parseCustomEventAndEntities = (eventData, eventProperties, userProperties)
         }
 
         if (!mapped && data.includeUnmappedEntities) {
-          eventProperties[cleanPropertyName(prop)] = extractFromArrayIfSingleElement(eventData[prop]);
+          eventProperties[cleanPropertyName(prop)] =
+            extractFromArrayIfSingleElement(eventData[prop]);
         }
       }
     }
@@ -464,7 +481,10 @@ if (data.includeCommonUserProperties && eventData.user_data) {
 }
 
 if (data.userMappingRules && data.userMappingRules.length > 0) {
-  userProperties = merge([userProperties, getEventDataByKeys(data.userMappingRules)]);
+  userProperties = merge([
+    userProperties,
+    getEventDataByKeys(data.userMappingRules),
+  ]);
 }
 
 let eventProperties = {};
@@ -478,13 +498,21 @@ if (data.includeCommonEventProperties) {
 }
 
 if (data.eventMappingRules && data.eventMappingRules.length > 0) {
-  eventProperties = merge([eventProperties, getEventDataByKeys(data.eventMappingRules)]);
+  eventProperties = merge([
+    eventProperties,
+    getEventDataByKeys(data.eventMappingRules),
+  ]);
 }
 
 parseCustomEventAndEntities(eventData, eventProperties, userProperties);
 
 let insertId =
-  eventData['x-sp-event_id'] || sha256Sync(eventData.event_name + eventData.client_id + makeString(getTimestampMillis()));
+  eventData['x-sp-event_id'] ||
+  sha256Sync(
+    eventData.event_name +
+      eventData.client_id +
+      makeString(getTimestampMillis())
+  );
 let platform = eventData['x-sp-platform'] || data.fallbackPlatform;
 
 let amplitudeEvent = {
@@ -512,8 +540,13 @@ if (eventData['x-sp-contexts_nl_basjes_yauaa_context_1']) {
   amplitudeEvent.device_model = context.deviceName;
 }
 
-if (eventData['x-sp-contexts_com_snowplowanalytics_snowplow_mobile_context_1']) {
-  const context = eventData['x-sp-contexts_com_snowplowanalytics_snowplow_mobile_context_1'][0];
+if (
+  eventData['x-sp-contexts_com_snowplowanalytics_snowplow_mobile_context_1']
+) {
+  const context =
+    eventData[
+      'x-sp-contexts_com_snowplowanalytics_snowplow_mobile_context_1'
+    ][0];
   amplitudeEvent.os_name = context.osType;
   amplitudeEvent.os_version = context.osVersion;
   amplitudeEvent.device_manufacturer = context.deviceManufacturer;
@@ -619,45 +652,117 @@ ___TESTS___
 
 scenarios:
 - name: Test Page View
-  code: "// to assert on\nlet argUrl, argCallback, argOptions, argBody;\nmock('sendHttpRequest',\
-    \ function() { \n  log(arguments);\n  argUrl = arguments[0];\n  argOptions = arguments[2];\n\
-    \  argBody = arguments[3];\n});\n\n// Call runCode to run the template's code.a\n\
-    runCode(mockData);\n\n// Assert\nassertApi('sendHttpRequest').wasCalled();\nassertThat(argUrl).isStrictlyEqualTo('https://api2.amplitude.com/2/httpapi');\n\
-    \nassertThat(argOptions.method).isStrictlyEqualTo('POST');\nassertThat(argOptions.timeout).isStrictlyEqualTo(5000);\n\
-    assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo('application/json');\n\
-    \nconst body = json.parse(argBody);\nassertThat(body).isEqualTo({\"api_key\":\"\
-    12345\",\"events\":[{\"event_type\":\"page_view\",\"device_id\":\"d54a1904-7798-401a-be0b-1a83bea73634\"\
-    ,\"event_properties\":{\"page_location\":\"https://snowplowanalytics.com/\",\"\
-    page_encoding\":\"UTF-8\",\"page_referrer\":\"referer\",\"page_title\":\"Collect,\
-    \ manage and operationalize behavioral data at scale | Snowplow\",\"screen_resolution\"\
-    :\"1920x1080\",\"viewport_size\":\"745x1302\"},\"user_properties\":{\"email_address\"\
-    :\"test@example.com\"},\"language\":\"en-GB\",\"insert_id\":\"7e1e4208-054a-4acc-a83e-a9bca5e60bd0\"\
-    ,\"user_id\":\"snow123\"}]});"
-setup: "const json = require('JSON');\nconst log = require('logToConsole');\n\nconst\
-  \ mockData = {\n  \"apiKey\": \"12345\",\n  \"includeCommonEventProperties\": true,\n\
-  \  \"includeCommonUserProperties\": true\n};\n\nconst mockEventObject = {\n  \"\
-  event_name\":\"page_view\",\n  \"client_id\":\"d54a1904-7798-401a-be0b-1a83bea73634\"\
-  ,\n  \"language\":\"en-GB\",\n  \"page_encoding\":\"UTF-8\",\n  \"page_hostname\"\
-  :\"snowplowanalytics.com\",\n  \"page_location\":\"https://snowplowanalytics.com/\"\
-  ,\n  \"page_path\":\"/\",\n  \"page_referrer\":\"referer\",\n  \"page_title\":\"\
-  Collect, manage and operationalize behavioral data at scale | Snowplow\",\n  \"\
-  screen_resolution\":\"1920x1080\",\n  \"user_id\":\"snow123\",\n  \"viewport_size\"\
-  :\"745x1302\",\n  \"user_agent\":\"user-agent\",\n  \"origin\":\"origin\",\n  \"\
-  host\":\"host\",\n  \"user_data\": { \n    \"email_address\":\"test@example.com\"\
-  \n  },\n  \"x-sp-event_id\":\"7e1e4208-054a-4acc-a83e-a9bca5e60bd0\",\n  \"x-sp-contexts_com_snowplowanalytics_snowplow_web_page_jsonschema_1\"\
-  : {\n    \"id\":\"a86c42e5-b831-45c8-b706-e214c26b4b3d\"\n  },\n  \"x-sp-contexts_org_w3_PerformanceTiming_jsonschema_1\"\
-  :{\n    \"navigationStart\":1628586508610,\n    \"unloadEventStart\":0,\n    \"\
-  unloadEventEnd\":0,\n    \"redirectStart\":0,\n    \"redirectEnd\":0,\n    \"fetchStart\"\
-  :1628586508610,\n    \"domainLookupStart\":1628586508637,\n    \"domainLookupEnd\"\
-  :1628586508691,\n    \"connectStart\":1628586508691,\n    \"connectEnd\":1628586508763,\n\
-  \    \"secureConnectionStart\":1628586508721,\n    \"requestStart\":1628586508763,\n\
-  \    \"responseStart\":1628586508797,\n    \"responseEnd\":1628586508821,\n    \"\
-  domLoading\":1628586509076,\n    \"domInteractive\":1628586509381,\n    \"domContentLoadedEventStart\"\
-  :1628586509408,\n    \"domContentLoadedEventEnd\":1628586509417,\n    \"domComplete\"\
-  :1628586510332,\n    \"loadEventStart\":1628586510332,\n    \"loadEventEnd\":1628586510334\n\
-  \  },\n  \"ga_session_id\":\"e7580b71-227b-4868-9ea9-322a263ce885\",\n  \"ga_session_number\"\
-  :\"1\",\n  \"x-ga-mp2-seg\":\"1\",\n  \"x-ga-protocol_version\":\"2\",\n  \"x-ga-page_id\"\
-  :\"a86c42e5-b831-45c8-b706-e214c26b4b3d\",\n};\n\nmock('getAllEventData', mockEventObject);"
+  code: |
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+    mock('sendHttpRequest', function () {
+      log(arguments);
+      argUrl = arguments[0];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+    });
+
+    // Call runCode to run the template's code.a
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+    assertThat(argUrl).isStrictlyEqualTo('https://api2.amplitude.com/2/httpapi');
+
+    assertThat(argOptions.method).isStrictlyEqualTo('POST');
+    assertThat(argOptions.timeout).isStrictlyEqualTo(5000);
+    assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo(
+      'application/json'
+    );
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo({
+      api_key: '12345',
+      events: [
+        {
+          event_type: 'page_view',
+          device_id: 'd54a1904-7798-401a-be0b-1a83bea73634',
+          event_properties: {
+            page_location: 'https://snowplowanalytics.com/',
+            page_encoding: 'UTF-8',
+            page_referrer: 'referer',
+            page_title:
+              'Collect, manage and operationalize behavioral data at scale | Snowplow',
+            screen_resolution: '1920x1080',
+            viewport_size: '745x1302',
+          },
+          user_properties: { email_address: 'test@example.com' },
+          language: 'en-GB',
+          insert_id: '7e1e4208-054a-4acc-a83e-a9bca5e60bd0',
+          user_id: 'snow123',
+        },
+      ],
+    });
+setup: |-
+  const json = require('JSON');
+  const log = require('logToConsole');
+
+  const mockData = {
+    apiKey: '12345',
+    includeCommonEventProperties: true,
+    includeCommonUserProperties: true,
+  };
+
+  const mockEventObject = {
+    event_name: 'page_view',
+    client_id: 'd54a1904-7798-401a-be0b-1a83bea73634',
+    language: 'en-GB',
+    page_encoding: 'UTF-8',
+    page_hostname: 'snowplowanalytics.com',
+    page_location: 'https://snowplowanalytics.com/',
+    page_path: '/',
+    page_referrer: 'referer',
+    page_title:
+      'Collect, manage and operationalize behavioral data at scale | Snowplow',
+    screen_resolution: '1920x1080',
+    user_id: 'snow123',
+    viewport_size: '745x1302',
+    user_agent: 'user-agent',
+    origin: 'origin',
+    host: 'host',
+    user_data: {
+      email_address: 'test@example.com',
+    },
+    'x-sp-event_id': '7e1e4208-054a-4acc-a83e-a9bca5e60bd0',
+    'x-sp-contexts_com_snowplowanalytics_snowplow_web_page_jsonschema_1': {
+      id: 'a86c42e5-b831-45c8-b706-e214c26b4b3d',
+    },
+    'x-sp-contexts_org_w3_PerformanceTiming_jsonschema_1': {
+      navigationStart: 1628586508610,
+      unloadEventStart: 0,
+      unloadEventEnd: 0,
+      redirectStart: 0,
+      redirectEnd: 0,
+      fetchStart: 1628586508610,
+      domainLookupStart: 1628586508637,
+      domainLookupEnd: 1628586508691,
+      connectStart: 1628586508691,
+      connectEnd: 1628586508763,
+      secureConnectionStart: 1628586508721,
+      requestStart: 1628586508763,
+      responseStart: 1628586508797,
+      responseEnd: 1628586508821,
+      domLoading: 1628586509076,
+      domInteractive: 1628586509381,
+      domContentLoadedEventStart: 1628586509408,
+      domContentLoadedEventEnd: 1628586509417,
+      domComplete: 1628586510332,
+      loadEventStart: 1628586510332,
+      loadEventEnd: 1628586510334,
+    },
+    ga_session_id: 'e7580b71-227b-4868-9ea9-322a263ce885',
+    ga_session_number: '1',
+    'x-ga-mp2-seg': '1',
+    'x-ga-protocol_version': '2',
+    'x-ga-page_id': 'a86c42e5-b831-45c8-b706-e214c26b4b3d',
+  };
+
+  mock('getAllEventData', mockEventObject);
 
 
 ___NOTES___
