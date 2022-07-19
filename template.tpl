@@ -318,6 +318,7 @@ const getAllEventData = require('getAllEventData');
 const getEventData = require('getEventData');
 const getTimestampMillis = require('getTimestampMillis');
 const JSON = require('JSON');
+const log = require('logToConsole');
 const makeString = require('makeString');
 const sendHttpRequest = require('sendHttpRequest');
 const sha256Sync = require('sha256Sync');
@@ -644,6 +645,24 @@ ___SERVER_PERMISSIONS___
       "isEditedByUser": true
     },
     "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {
+        "publicId": "logging",
+        "versionId": "1"
+      },
+      "param": [
+        {
+          "key": "environments",
+          "value": {
+            "type": 1,
+            "string": "debug"
+          }
+        }
+      ]
+    },
+    "isRequired": true
   }
 ]
 
@@ -656,7 +675,7 @@ scenarios:
     // to assert on
     let argUrl, argCallback, argOptions, argBody;
     mock('sendHttpRequest', function () {
-      log(arguments);
+      logToConsole(arguments);
       argUrl = arguments[0];
       argOptions = arguments[2];
       argBody = arguments[3];
@@ -700,7 +719,7 @@ scenarios:
     });
 setup: |-
   const json = require('JSON');
-  const log = require('logToConsole');
+  const logToConsole = require('logToConsole');
 
   const mockData = {
     apiKey: '12345',
