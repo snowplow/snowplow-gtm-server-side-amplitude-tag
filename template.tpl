@@ -472,6 +472,7 @@ const parseCustomEventAndEntities = (
   }
 };
 
+// Main
 const url = data.useEUServer ? euEndpoint : standardEndpoint;
 
 const eventData = getAllEventData();
@@ -672,8 +673,58 @@ ___TESTS___
 scenarios:
 - name: Test Page View
   code: |
+    const mockClientEvent = mockEventObjectPageView;
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: true,
+      extractFromArray: true,
+      includeAllEntities: true,
+      includeCommonEventProperties: true,
+      includeCommonUserProperties: true,
+      forwardIp: true,
+      fallbackPlatform: 'web',
+    };
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          event_properties: {
+            page_location: mockClientEvent.page_location,
+            page_encoding: mockClientEvent.page_encoding,
+            page_referrer: mockClientEvent.page_referrer,
+            page_title: mockClientEvent.page_title,
+            screen_resolution: mockClientEvent.screen_resolution,
+            viewport_size: mockClientEvent.viewport_size,
+            contexts_com_snowplowanalytics_snowplow_web_page_1:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_web_page_1'
+              ],
+            contexts_org_w3_PerformanceTiming_1:
+              mockClientEvent['x-sp-contexts_org_w3_PerformanceTiming_1'],
+          },
+          user_properties: {
+            email_address: mockClientEvent.user_data.email_address,
+          },
+          language: mockClientEvent.language,
+          platform: mockData.fallbackPlatform,
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
     // to assert on
     let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
     mock('sendHttpRequest', function () {
       logToConsole(arguments);
       argUrl = arguments[0];
@@ -695,39 +746,356 @@ scenarios:
     );
 
     const body = json.parse(argBody);
-    assertThat(body).isEqualTo({
-      api_key: '12345',
+    assertThat(body).isEqualTo(expectedBody);
+- name: Test Self-Describing include option
+  code: |
+    const mockClientEvent = mockEventObjectSelfDesc;
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: true,
+      includeSelfDescribingEvent: true,
+      extractFromArray: true,
+      includeAllEntities: true,
+      includeCommonEventProperties: true,
+      includeCommonUserProperties: true,
+      forwardIp: true,
+      fallbackPlatform: 'web',
+    };
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
       events: [
         {
-          event_type: 'page_view',
-          device_id: 'd54a1904-7798-401a-be0b-1a83bea73634',
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
           event_properties: {
-            page_location: 'https://snowplowanalytics.com/',
-            page_encoding: 'UTF-8',
-            page_referrer: 'referer',
-            page_title:
-              'Collect, manage and operationalize behavioral data at scale | Snowplow',
-            screen_resolution: '1920x1080',
-            viewport_size: '745x1302',
+            page_location: mockClientEvent.page_location,
+            page_encoding: mockClientEvent.page_encoding,
+            screen_resolution: mockClientEvent.screen_resolution,
+            viewport_size: mockClientEvent.viewport_size,
+            self_describing_event_com_snowplowanalytics_snowplow_media_player_event_1:
+              {
+                type: 'play',
+              },
+            contexts_com_youtube_youtube_1:
+              mockClientEvent['x-sp-contexts_com_youtube_youtube_1'][0],
+            contexts_com_snowplowanalytics_snowplow_web_page_1:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_web_page_1'
+              ][0],
+            contexts_com_snowplowanalytics_snowplow_media_player_1:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_media_player_1'
+              ][0],
+            'contexts_com_google_tag-manager_server-side_user_data_1':
+              mockClientEvent[
+                'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
+              ][0],
           },
-          user_properties: { email_address: 'test@example.com' },
-          language: 'en-GB',
-          insert_id: '7e1e4208-054a-4acc-a83e-a9bca5e60bd0',
-          user_id: 'snow123',
+          user_properties: {
+            email_address: mockClientEvent.user_data.email_address,
+          },
+          language: mockClientEvent.language,
+          platform: mockClientEvent['x-sp-platform'],
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
         },
       ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
     });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+    });
+
+    // Call runCode to run the template's code.a
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+    assertThat(argUrl).isStrictlyEqualTo('https://api.eu.amplitude.com/2/httpapi');
+
+    assertThat(argOptions.method).isStrictlyEqualTo('POST');
+    assertThat(argOptions.timeout).isStrictlyEqualTo(5000);
+    assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo(
+      'application/json'
+    );
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
+- name: Test contexts no extract
+  code: |
+    const mockClientEvent = mockEventObjectSelfDesc;
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: false,
+      includeAllEntities: true,
+      includeCommonEventProperties: true,
+      includeCommonUserProperties: true,
+      forwardIp: true,
+      fallbackPlatform: 'web',
+    };
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          event_properties: {
+            page_location: mockClientEvent.page_location,
+            page_encoding: mockClientEvent.page_encoding,
+            screen_resolution: mockClientEvent.screen_resolution,
+            viewport_size: mockClientEvent.viewport_size,
+            contexts_com_youtube_youtube_1:
+              mockClientEvent['x-sp-contexts_com_youtube_youtube_1'],
+            contexts_com_snowplowanalytics_snowplow_web_page_1:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_web_page_1'
+              ],
+            contexts_com_snowplowanalytics_snowplow_media_player_1:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_media_player_1'
+              ],
+            'contexts_com_google_tag-manager_server-side_user_data_1':
+              mockClientEvent[
+                'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
+              ],
+          },
+          user_properties: {
+            email_address: mockClientEvent.user_data.email_address,
+          },
+          language: mockClientEvent.language,
+          platform: mockClientEvent['x-sp-platform'],
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+    });
+
+    // Call runCode to run the template's code.a
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+    assertThat(argUrl).isStrictlyEqualTo('https://api2.amplitude.com/2/httpapi');
+
+    assertThat(argOptions.method).isStrictlyEqualTo('POST');
+    assertThat(argOptions.timeout).isStrictlyEqualTo(5000);
+    assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo(
+      'application/json'
+    );
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
+- name: Test event context rules
+  code: |
+    const mockClientEvent = mockEventObjectSelfDesc;
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: true,
+      includeAllEntities: false,
+      includeUnmappedEntities: false,
+      entityMappingRules: [
+        {
+          key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
+          mappedKey: 'youtube',
+          propertiesObjectToPopulate: 'event_properties',
+        },
+        {
+          key: 'contexts_com_snowplowanalytics_snowplow_media_player_1',
+          mappedKey: 'media_player',
+          propertiesObjectToPopulate: 'event_properties',
+        },
+        {
+          key: 'contexts_com_google_tag-manager_server-side_user_data_1',
+          mappedKey: 'user_data',
+          propertiesObjectToPopulate: 'user_properties',
+        },
+      ],
+      includeCommonEventProperties: true,
+      includeCommonUserProperties: true,
+      forwardIp: false,
+      fallbackPlatform: 'web',
+    };
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          event_properties: {
+            page_location: mockClientEvent.page_location,
+            page_encoding: mockClientEvent.page_encoding,
+            screen_resolution: mockClientEvent.screen_resolution,
+            viewport_size: mockClientEvent.viewport_size,
+            youtube: mockClientEvent['x-sp-contexts_com_youtube_youtube_1'][0],
+            media_player:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_media_player_1'
+              ][0],
+          },
+          user_properties: {
+            email_address: mockClientEvent.user_data.email_address,
+            user_data:
+              mockClientEvent[
+                'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
+              ][0],
+          },
+          language: mockClientEvent.language,
+          platform: mockClientEvent['x-sp-platform'],
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+    });
+
+    // Call runCode to run the template's code.a
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+    assertThat(argUrl).isStrictlyEqualTo('https://api2.amplitude.com/2/httpapi');
+
+    assertThat(argOptions.method).isStrictlyEqualTo('POST');
+    assertThat(argOptions.timeout).isStrictlyEqualTo(5000);
+    assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo(
+      'application/json'
+    );
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
+- name: Test additional event mapping options
+  code: |
+    const mockClientEvent = mockEventObjectSelfDesc;
+
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: true,
+      includeAllEntities: false,
+      includeUnmappedEntities: false,
+      includeCommonEventProperties: false,
+      eventMappingRules: [
+        {
+          key: 'x-sp-self_describing_event_com_snowplowanalytics_snowplow_media_player_event_1.type',
+          mappedKey: 'media_event_type',
+        },
+        {
+          key: 'x-sp-tp2.tv',
+          mappedKey: 'tracker',
+        },
+      ],
+      includeCommonUserProperties: false,
+      userMappingRules: [
+        {
+          key: 'user_data.email_address',
+          mappedKey: 'email',
+        },
+      ],
+      forwardIp: true,
+      fallbackPlatform: 'web',
+    };
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          event_properties: {
+            media_event_type: 'play',
+            tracker: mockClientEvent['x-sp-tp2'].tv,
+          },
+          user_properties: {
+            email: mockClientEvent.user_data.email_address,
+          },
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+          language: mockClientEvent.language,
+          platform: mockClientEvent['x-sp-platform'],
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+    });
+
+    // Call runCode to run the template's code.a
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+    assertThat(argUrl).isStrictlyEqualTo('https://api2.amplitude.com/2/httpapi');
+
+    assertThat(argOptions.method).isStrictlyEqualTo('POST');
+    assertThat(argOptions.timeout).isStrictlyEqualTo(5000);
+    assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo(
+      'application/json'
+    );
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
 setup: |-
   const json = require('JSON');
   const logToConsole = require('logToConsole');
+  const getTypeOf = require('getType');
 
-  const mockData = {
-    apiKey: '12345',
-    includeCommonEventProperties: true,
-    includeCommonUserProperties: true,
-  };
-
-  const mockEventObject = {
+  const mockEventObjectPageView = {
     event_name: 'page_view',
     client_id: 'd54a1904-7798-401a-be0b-1a83bea73634',
     language: 'en-GB',
@@ -748,10 +1116,10 @@ setup: |-
       email_address: 'test@example.com',
     },
     'x-sp-event_id': '7e1e4208-054a-4acc-a83e-a9bca5e60bd0',
-    'x-sp-contexts_com_snowplowanalytics_snowplow_web_page_jsonschema_1': {
+    'x-sp-contexts_com_snowplowanalytics_snowplow_web_page_1': {
       id: 'a86c42e5-b831-45c8-b706-e214c26b4b3d',
     },
-    'x-sp-contexts_org_w3_PerformanceTiming_jsonschema_1': {
+    'x-sp-contexts_org_w3_PerformanceTiming_1': {
       navigationStart: 1628586508610,
       unloadEventStart: 0,
       unloadEventEnd: 0,
@@ -781,7 +1149,171 @@ setup: |-
     'x-ga-page_id': 'a86c42e5-b831-45c8-b706-e214c26b4b3d',
   };
 
-  mock('getAllEventData', mockEventObject);
+  const mockEventObjectSelfDesc = {
+    event_name: 'media_player_event',
+    client_id: '74b3b330-6cae-400f-949d-e6d13c6784ba',
+    language: 'en-US',
+    page_encoding: 'windows-1252',
+    page_hostname: 'localhost',
+    page_location: 'http://localhost:8000/',
+    page_path: '/',
+    screen_resolution: '1920x1080',
+    user_id: 'tester',
+    viewport_size: '1235x975',
+    user_agent: 'curl/7.81.0',
+    host: 'host',
+    'x-sp-app_id': 'media-test',
+    'x-sp-platform': 'tv',
+    'x-sp-dvce_created_tstamp': '1658251401583',
+    'x-sp-event_id': '2f6656c4-3e86-4ad6-8584-987e6be6e90b',
+    'x-sp-name_tracker': 'spTest',
+    'x-sp-v_tracker': 'js-3.5.0',
+    'x-sp-domain_sessionid': '3628400a-540f-4fad-8d88-1e405bd55cd8',
+    'x-sp-domain_sessionidx': 1,
+    'x-sp-br_cookies': '1',
+    'x-sp-br_colordepth': '24',
+    'x-sp-br_viewwidth': 1235,
+    'x-sp-br_viewheight': 975,
+    'x-sp-dvce_screenwidth': 1920,
+    'x-sp-dvce_screenheight': 1080,
+    'x-sp-doc_charset': 'windows-1252',
+    'x-sp-doc_width': 1235,
+    'x-sp-doc_height': 975,
+    'x-sp-dvce_sent_tstamp': '1658251401586',
+    'x-sp-tp2': {
+      e: 'ue',
+      eid: '2f6656c4-3e86-4ad6-8584-987e6be6e90b',
+      tv: 'js-3.5.0',
+      tna: 'spTest',
+      aid: 'media-test',
+      p: 'web',
+      cookie: '1',
+      cs: 'windows-1252',
+      lang: 'en-US',
+      res: '1920x1080',
+      cd: '24',
+      tz: 'Europe/Athens',
+      dtm: '1658251401583',
+      vp: '1235x975',
+      ds: '1235x975',
+      vid: '1',
+      sid: '3628400a-540f-4fad-8d88-1e405bd55cd8',
+      duid: '74b3b330-6cae-400f-949d-e6d13c6784ba',
+      uid: 'tester',
+      url: 'http://localhost:8000/',
+      ue_pr:
+        '{"schema":"iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0","data":{"schema":"iglu:com.snowplowanalytics.snowplow/media_player_event/jsonschema/1-0-0","data":{"type":"play"}}}',
+      co: '{"schema":"iglu:com.snowplowanalytics.snowplow/contexts/jsonschema/1-0-0","data":[{"schema":"iglu:com.youtube/youtube/jsonschema/1-0-0","data":{"autoPlay":false,"avaliablePlaybackRates":[0.25,0.5,0.75,1,1.25,1.5,1.75,2],"buffering":false,"controls":true,"cued":false,"loaded":2,"playbackQuality":"medium","playerId":"youtube-song","unstarted":false,"url":"https://www.youtube.com/watch?v=Yy5cKX4jBkQ","avaliableQualityLevels":["hd1080","hd720","large","medium","small","tiny","auto"]}},{"schema":"iglu:com.snowplowanalytics.snowplow/media_player/jsonschema/1-0-0","data":{"currentTime":0.01755785504150391,"duration":222.041,"ended":false,"loop":false,"muted":false,"paused":false,"playbackRate":1,"volume":100}},{"schema":"iglu:com.snowplowanalytics.snowplow/web_page/jsonschema/1-0-0","data":{"id":"a247ade1-06da-4823-ae33-db41d794a6cc"}},{"schema":"iglu:com.google.tag-manager.server-side/user_data/jsonschema/1-0-0","data":{"email_address":"foo@test.io"}}]}',
+      stm: '1658251401586',
+    },
+    'x-sp-self_describing_event_com_snowplowanalytics_snowplow_media_player_event_1':
+      { type: 'play' },
+    'x-sp-contexts_com_youtube_youtube_1': [
+      {
+        autoPlay: false,
+        avaliablePlaybackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+        buffering: false,
+        controls: true,
+        cued: false,
+        loaded: 2,
+        playbackQuality: 'medium',
+        playerId: 'youtube-song',
+        unstarted: false,
+        url: 'https://www.youtube.com/watch?v=Yy5cKX4jBkQ',
+        avaliableQualityLevels: [
+          'hd1080',
+          'hd720',
+          'large',
+          'medium',
+          'small',
+          'tiny',
+          'auto',
+        ],
+      },
+    ],
+    'x-sp-contexts_com_snowplowanalytics_snowplow_media_player_1': [
+      {
+        currentTime: 0.01755785504150391,
+        duration: 222.041,
+        ended: false,
+        loop: false,
+        muted: false,
+        paused: false,
+        playbackRate: 1,
+        volume: 100,
+      },
+    ],
+    'x-sp-contexts_com_snowplowanalytics_snowplow_web_page_1': [
+      { id: 'a247ade1-06da-4823-ae33-db41d794a6cc' },
+    ],
+    'x-sp-contexts_com_google_tag-manager_server-side_user_data_1': [
+      { email_address: 'foo@test.io' },
+    ],
+    'x-sp-contexts': [
+      {
+        schema: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
+        data: {
+          autoPlay: false,
+          avaliablePlaybackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+          buffering: false,
+          controls: true,
+          cued: false,
+          loaded: 2,
+          playbackQuality: 'medium',
+          playerId: 'youtube-song',
+          unstarted: false,
+          url: 'https://www.youtube.com/watch?v=Yy5cKX4jBkQ',
+          avaliableQualityLevels: [
+            'hd1080',
+            'hd720',
+            'large',
+            'medium',
+            'small',
+            'tiny',
+            'auto',
+          ],
+        },
+      },
+      {
+        schema:
+          'iglu:com.snowplowanalytics.snowplow/media_player/jsonschema/1-0-0',
+        data: {
+          currentTime: 0.01755785504150391,
+          duration: 222.041,
+          ended: false,
+          loop: false,
+          muted: false,
+          paused: false,
+          playbackRate: 1,
+          volume: 100,
+        },
+      },
+      {
+        schema: 'iglu:com.snowplowanalytics.snowplow/web_page/jsonschema/1-0-0',
+        data: { id: 'a247ade1-06da-4823-ae33-db41d794a6cc' },
+      },
+      {
+        schema:
+          'iglu:com.google.tag-manager.server-side/user_data/jsonschema/1-0-0',
+        data: { email_address: 'foo@test.io' },
+      },
+    ],
+    user_data: { email_address: 'foo@test.io' },
+    ga_session_id: '3628400a-540f-4fad-8d88-1e405bd55cd8',
+    ga_session_number: '1',
+    'x-ga-mp2-seg': '1',
+    'x-ga-protocol_version': '2',
+    'x-ga-page_id': 'a247ade1-06da-4823-ae33-db41d794a6cc',
+  };
+
+  // Helper to mock getEventData
+  const getFromPath = (path, obj) => {
+    if (getTypeOf(path) === 'string' && getTypeOf(obj) === 'object') {
+      const splitPath = path.split('.').filter((prop) => !!prop);
+      return splitPath.reduce((acc, curr) => acc && acc[curr], obj);
+    }
+    return undefined;
+  };
 
 
 ___NOTES___
