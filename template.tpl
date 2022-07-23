@@ -265,47 +265,126 @@ ___TEMPLATE_PARAMETERS___
         "displayName": "Forward Users IP address"
       },
       {
-        "type": "SELECT",
-        "name": "fallbackPlatform",
-        "displayName": "Fallback platform identifier",
-        "macrosInSelect": false,
-        "selectItems": [
+        "type": "GROUP",
+        "name": "platformGroup",
+        "displayName": "Platform identifier",
+        "groupStyle": "ZIPPY_OPEN",
+        "subParams": [
           {
-            "value": "web",
-            "displayValue": "Web"
-          },
-          {
-            "value": "mob",
-            "displayValue": "Mobile"
-          },
-          {
-            "value": "pc",
-            "displayValue": "Desktop PC"
-          },
-          {
-            "value": "srv",
-            "displayValue": "Server-side"
-          },
-          {
-            "value": "app",
-            "displayValue": "General App"
-          },
-          {
-            "value": "tv",
-            "displayValue": "Connected TV"
-          },
-          {
-            "value": "cnsl",
-            "displayValue": "Games Console"
-          },
-          {
-            "value": "iot",
-            "displayValue": "Internet of Things"
+            "type": "SELECT",
+            "name": "fallbackPlatform",
+            "macrosInSelect": false,
+            "selectItems": [
+              {
+                "value": "web",
+                "displayValue": "Web"
+              },
+              {
+                "value": "mob",
+                "displayValue": "Mobile"
+              },
+              {
+                "value": "pc",
+                "displayValue": "Desktop PC"
+              },
+              {
+                "value": "srv",
+                "displayValue": "Server-side"
+              },
+              {
+                "value": "app",
+                "displayValue": "General App"
+              },
+              {
+                "value": "tv",
+                "displayValue": "Connected TV"
+              },
+              {
+                "value": "cnsl",
+                "displayValue": "Games Console"
+              },
+              {
+                "value": "iot",
+                "displayValue": "Internet of Things"
+              }
+            ],
+            "simpleValueType": true,
+            "defaultValue": "web",
+            "help": "The platform value which will be set if there isn\u0027t one on the original event.",
+            "displayName": "Fallback platform identifier"
           }
-        ],
-        "simpleValueType": true,
-        "defaultValue": "web",
-        "help": "The platform value which will be set if there isn\u0027t one on the original event."
+        ]
+      },
+      {
+        "type": "GROUP",
+        "name": "timeGroup",
+        "displayName": "Amplitude time setting",
+        "groupStyle": "ZIPPY_OPEN",
+        "subParams": [
+          {
+            "type": "SELECT",
+            "name": "amplitudeTime",
+            "macrosInSelect": false,
+            "selectItems": [
+              {
+                "value": "no",
+                "displayValue": "Do not set"
+              },
+              {
+                "value": "current",
+                "displayValue": "Set to current timestamp"
+              },
+              {
+                "value": "eventProperty",
+                "displayValue": "Set from event property"
+              }
+            ],
+            "simpleValueType": true,
+            "subParams": [
+              {
+                "type": "TEXT",
+                "name": "timeProp",
+                "displayName": "Event property name",
+                "simpleValueType": true,
+                "enablingConditions": [
+                  {
+                    "paramName": "amplitudeTime",
+                    "paramValue": "eventProperty",
+                    "type": "EQUALS"
+                  }
+                ],
+                "help": "Specify the client event property to populate the event time (milliseconds since unix epoch).",
+                "valueValidators": [
+                  {
+                    "type": "NON_EMPTY"
+                  }
+                ]
+              },
+              {
+                "type": "TEXT",
+                "name": "timeVar",
+                "displayName": "Variable name",
+                "simpleValueType": true,
+                "help": "Specify the variable to populate the event time (milliseconds since unix epoch).",
+                "valueValidators": [
+                  {
+                    "type": "NON_EMPTY"
+                  }
+                ],
+                "enablingConditions": [
+                  {
+                    "paramName": "amplitudeTime",
+                    "paramValue": "variable",
+                    "type": "EQUALS"
+                  }
+                ]
+              }
+            ],
+            "defaultValue": "no",
+            "displayName": "Amplitude event time",
+            "help": "Allows you to set the time of the Amplitude event from the current timestamp or from an event property (milliseconds since unix epoch). If time is not sent with the event, then it is automatically set by Amplitude to the request upload time."
+          }
+        ]
       }
     ]
   },
@@ -350,10 +429,13 @@ const getAllEventData = require('getAllEventData');
 const getContainerVersion = require('getContainerVersion');
 const getEventData = require('getEventData');
 const getRequestHeader = require('getRequestHeader');
+const getRequestPath = require('getRequestPath');
 const getTimestampMillis = require('getTimestampMillis');
 const JSON = require('JSON');
 const log = require('logToConsole');
+const makeNumber = require('makeNumber');
 const makeString = require('makeString');
+const Math = require('Math');
 const sendHttpRequest = require('sendHttpRequest');
 const sha256Sync = require('sha256Sync');
 
@@ -361,6 +443,16 @@ const sha256Sync = require('sha256Sync');
 const standardEndpoint = 'https://api2.amplitude.com/2/httpapi';
 const euEndpoint = 'https://api.eu.amplitude.com/2/httpapi';
 const tagName = 'Amplitude HTTP API V2';
+const spEnrichedPath = '/com.snowplowanalytics.snowplow/enriched';
+const spAtomicTstamps = [
+  'x-sp-collector_tstamp',
+  'x-sp-derived_tstamp',
+  'x-sp-true_tstamp',
+  'x-sp-dvce_created_tstamp',
+  'x-sp-dvce_sent_tstamp',
+  'x-sp-etl_tstamp',
+  'x-sp-refr_dvce_tstamp',
+];
 
 // Helpers
 
@@ -428,6 +520,199 @@ const doLogging = (typeName, stdInfo, logInfo) => {
 
   log(JSON.stringify(logMessage));
 };
+
+/*
+ * Determines whether the event is a snowplow enriched event
+ * based on the request path.
+ *
+ * @returns - boolean
+ */
+const isSpEnrichedEvent = () => {
+  const requestPath = getRequestPath();
+  if (requestPath === spEnrichedPath) {
+    return true;
+  }
+  return false;
+};
+
+/*
+ * Determines if a property of the client event object
+ * is a Snowplow enriched timestamp.
+ *
+ * @returns - boolean
+ */
+const isSpTstampProp = (propName) => {
+  if (spAtomicTstamps.indexOf(propName) >= 0) {
+    return true;
+  }
+  return false;
+};
+
+/*
+ * Determines whether its argument is a string formatted
+ * per ISO 8601 time representation.
+ * No support for timezones except Z.
+ * Supported forms: '2022-07-22T23:56:32Z' and '2022-07-22T23:56:32.123Z".
+ * Returns an array of the string time parts.
+ *
+ * @param x {any}
+ * @returns Array or undefined
+ */
+function isISOString(x) {
+  if (typeof x !== 'string') {
+    return undefined;
+  }
+
+  // allow only Z
+  if (x.indexOf('Z') < 0) {
+    return undefined;
+  }
+
+  const splitT = x.replace('Z', '').split('T');
+  if (splitT.length !== 2) {
+    return undefined;
+  }
+
+  const isoYMD = splitT[0].split('-');
+  if (isoYMD.length !== 3) {
+    return undefined;
+  }
+
+  const year = isoYMD[0];
+  const month = isoYMD[1];
+  const day = isoYMD[2];
+  if (year.length !== 4 || month.length !== 2 || day.length !== 2) {
+    return undefined;
+  }
+
+  const isoTime = splitT[1].split('.');
+  if (isoTime.length < 1 || isoTime.length > 2) {
+    return undefined;
+  }
+
+  const millis = isoTime.length === 2 ? isoTime[1] : '000';
+  if (millis.length !== 3) {
+    return undefined;
+  }
+
+  const isoHMS = isoTime[0].split(':');
+  if (isoHMS.length !== 3) {
+    return undefined;
+  }
+
+  const hour = isoHMS[0];
+  const min = isoHMS[1];
+  const sec = isoHMS[2];
+  if (hour.length !== 2 || min.length !== 2 || sec.length !== 2) {
+    return undefined;
+  }
+
+  return [year, month, day, hour, min, sec, millis];
+}
+
+/*
+ * Parses an ISO-time string to a time object.
+ * Note the differences makeInteger Vs makeNumber:
+ *
+ * makeInteger('foo')     -> 0
+ * makeInteger('')        -> 0
+ * makeInteger(undefined) -> 0
+ * makeInteger(null)      -> 0
+ *
+ * makeNumber('foo')      -> null
+ * makeNumber('')         -> 0
+ * makeNumber(undefined)  -> null
+ * makeNumber(null)       -> 0
+ *
+ * Additional considerations: NaN is undefined here. Instead:
+ *
+ * logToConsole(makeNumber('foo')) -> null
+ * logToConsole(makeNumber('foo') === null) -> false
+ * logToConsole(getType(makeNumber('foo'))) -> number
+ * logToConsole(makeNumber('foo') === makeNumber('foo')) -> false
+ * logToConsole(makeNumber('foo') == makeNumber('foo')) -> false
+ *
+ * @param isoString {string}
+ * @returns - an object with the time parts as numbers
+ */
+function parseISOTime(isoString) {
+  const iso = isISOString(isoString);
+  if (!iso) {
+    return undefined;
+  }
+
+  // At this point we know each iso element is a non empty string, as this
+  // is guaranteed by isISOString.
+  // So first we makeNumber so that we don't get a false zero.
+  const y = makeNumber(iso[0]);
+  const m = makeNumber(iso[1]);
+  const d = makeNumber(iso[2]);
+  const hr = makeNumber(iso[3]);
+  const min = makeNumber(iso[4]);
+  const sec = makeNumber(iso[5]);
+  const msec = makeNumber(iso[6]);
+
+  // then we distinguish it is not "NaN"
+  if (
+    y != y ||
+    m != m ||
+    d != d ||
+    hr != hr ||
+    min != min ||
+    sec != sec ||
+    msec != msec
+  ) {
+    return undefined;
+  }
+
+  return {
+    y: y,
+    m: m,
+    d: d,
+    hr: hr,
+    min: min,
+    sec: sec,
+    msec: msec,
+  };
+}
+
+/*
+ * https://howardhinnant.github.io/date_algorithms.html#days_from_civil
+ */
+function isoToUnixMillis(isoTime) {
+  const iso = parseISOTime(isoTime);
+  if (!iso) {
+    return undefined;
+  }
+
+  const y = iso.m <= 2 ? iso.y - 1 : iso.y;
+  const era = Math.floor((y >= 0 ? y : y - 399) / 400);
+
+  // yoe: year of era - [0, 399]
+  // moy: adjusted month of year, counting March as first
+  // doy: day of year - [0, 365]
+  // doe: day of era - [0, 146096]
+  const yoe = y - era * 400;
+  const moy = iso.m > 2 ? iso.m - 3 : iso.m + 9;
+  const doy = Math.floor((153 * moy + 2) / 5) + iso.d - 1;
+  // doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy;
+  // We break it down due to this weird behaviour here: x+y-z+w != x+y+w-z
+  const preDoe = yoe * 365 + Math.floor(yoe / 4) + doy;
+  const doe = preDoe - Math.floor(yoe / 100);
+
+  // to calculate unix days we subtract 719468 below
+  // in order to adjust to unix beginning of time
+  // i.e. to make the serial day 0 equivalent to '1970-01-01'
+  const unixFullDays = era * 146097 + doe - 719468;
+
+  // Finally we calculate the secs (no leap taken into account)
+  const unixDaySecs = unixFullDays * 86400;
+  const unixExtraSecs = iso.hr * 3600 + iso.min * 60 + iso.sec;
+  const unixSecs = unixDaySecs + unixExtraSecs;
+  const unixMillis = unixSecs * 1000 + iso.msec;
+
+  return unixMillis;
+}
 
 const cleanObject = (obj) => {
   let target = {};
@@ -573,6 +858,38 @@ const parseCustomEventAndEntities = (
   }
 };
 
+/*
+ * Returns the time property for Amplitude event
+ * depending on time settings configured.
+ *
+ * @param tagConfig {Object} - the tag configuration object
+ * @returns - unix timestamp or undefined
+ */
+const getAmplitudeTime = (tagConfig) => {
+  const timeSetting = tagConfig.amplitudeTime;
+  switch (timeSetting) {
+    case 'no':
+      return undefined;
+    case 'current':
+      return getTimestampMillis();
+    case 'eventProperty':
+      const timeProp = tagConfig.timeProp;
+      const timeValue = getEventData(timeProp);
+      if (isSpTstampProp(timeProp) && isSpEnrichedEvent()) {
+        return isoToUnixMillis(getEventData(timeProp));
+      }
+      // with extra check to ensure null is not NaN
+      const numValue = makeNumber(timeValue);
+      if (numValue != numValue) {
+        return undefined;
+      }
+      return numValue;
+    default:
+      // default as 'no'
+      return undefined;
+  }
+};
+
 // Main
 const eventData = getAllEventData();
 
@@ -634,6 +951,7 @@ let amplitudeEvent = {
   event_type: eventData.event_name,
   device_id: eventData.client_id,
   ip: data.forwardIp ? eventData.ip_override : undefined,
+  time: getAmplitudeTime(data),
   event_properties: eventProperties,
   user_properties: userProperties,
   platform: platform,
@@ -838,6 +1156,13 @@ ___SERVER_PERMISSIONS___
           }
         },
         {
+          "key": "pathAllowed",
+          "value": {
+            "type": 8,
+            "boolean": true
+          }
+        },
+        {
           "key": "requestAccess",
           "value": {
             "type": 1,
@@ -894,6 +1219,7 @@ scenarios:
       includeCommonUserProperties: true,
       forwardIp: true,
       fallbackPlatform: 'web',
+      amplitudeTime: 'no',
       logType: 'no',
     };
 
@@ -989,6 +1315,7 @@ scenarios:
       includeCommonUserProperties: true,
       forwardIp: true,
       fallbackPlatform: 'web',
+      amplitudeTime: 'no',
       logType: 'debug',
     };
 
@@ -1094,6 +1421,7 @@ scenarios:
       includeCommonUserProperties: true,
       forwardIp: true,
       fallbackPlatform: 'web',
+      amplitudeTime: 'no',
       // test also logType default is debug
       // logType undefined
     };
@@ -1214,6 +1542,7 @@ scenarios:
       includeCommonUserProperties: true,
       forwardIp: false,
       fallbackPlatform: 'web',
+      amplitudeTime: 'no',
       logType: 'always',
     };
 
@@ -1329,6 +1658,7 @@ scenarios:
       ],
       forwardIp: true,
       fallbackPlatform: 'web',
+      amplitudeTime: 'no',
       logType: 'always',
     };
 
@@ -1414,6 +1744,7 @@ scenarios:
       includeCommonUserProperties: false,
       forwardIp: true,
       fallbackPlatform: 'web',
+      amplitudeTime: 'no',
       logType: 'debug',
     };
 
@@ -1528,6 +1859,7 @@ scenarios:
       includeCommonUserProperties: true,
       forwardIp: true,
       fallbackPlatform: 'web',
+      amplitudeTime: 'no',
       logType: 'debug',
     };
 
@@ -1549,6 +1881,260 @@ scenarios:
     // Assert
     assertApi('sendHttpRequest').wasCalled();
     assertApi('logToConsole').wasNotCalled();
+- name: Test Amplitude time - current
+  code: |
+    const mockClientEvent = mockEventObjectPageView;
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: true,
+      includeAllEntities: false,
+      includeCommonEventProperties: false,
+      includeCommonUserProperties: false,
+      forwardIp: true,
+      fallbackPlatform: 'web',
+      amplitudeTime: 'current',
+      logType: 'no',
+    };
+    const mockTimestamp = 1658558068123;
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          time: mockTimestamp,
+          event_properties: {},
+          user_properties: {},
+          platform: mockData.fallbackPlatform,
+          language: mockClientEvent.language,
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('getTimestampMillis', mockTimestamp);
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argCallback = arguments[1];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+    });
+
+    // Call runCode to run the template's code
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
+- name: Test Amplitude time - prop not exists
+  code: |
+    const mockClientEvent = mockEventObjectPageView;
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: true,
+      includeAllEntities: false,
+      includeCommonEventProperties: false,
+      includeCommonUserProperties: false,
+      forwardIp: true,
+      fallbackPlatform: 'web',
+      amplitudeTime: 'eventProperty',
+      timeProp: 'propDoesNotExist',
+      logType: 'no',
+    };
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          // no time
+          event_properties: {},
+          user_properties: {},
+          platform: mockData.fallbackPlatform,
+          language: mockClientEvent.language,
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argCallback = arguments[1];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+    });
+
+    // Call runCode to run the template's code
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
+- name: Test Amplitude time - prop
+  code: |
+    const makeNum = require('makeNumber');
+
+    const mockClientEvent = mockEventObjectSelfDesc;
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: true,
+      includeAllEntities: false,
+      includeCommonEventProperties: false,
+      includeCommonUserProperties: false,
+      forwardIp: true,
+      fallbackPlatform: 'web',
+      amplitudeTime: 'eventProperty',
+      timeProp: 'x-sp-dvce_created_tstamp',
+      logType: 'no',
+    };
+    // raw Snowplow events have unix timestamps
+    const tp2MockRequestPath = '/com.snowplowanaytics.snowplow/tp2';
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          time: makeNum(mockClientEvent['x-sp-dvce_created_tstamp']),
+          event_properties: {},
+          user_properties: {},
+          platform: mockClientEvent['x-sp-platform'],
+          language: mockClientEvent.language,
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argCallback = arguments[1];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+    });
+    mock('getRequestPath', tp2MockRequestPath);
+
+    // Call runCode to run the template's code
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
+- name: Test Amplitude time - isoToUnix
+  code: |
+    const mockClientEvent = mockEventObjectEnriched;
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: true,
+      includeAllEntities: false,
+      includeCommonEventProperties: false,
+      includeCommonUserProperties: false,
+      forwardIp: true,
+      fallbackPlatform: 'srv',
+      amplitudeTime: 'eventProperty',
+      timeProp: 'x-sp-collector_tstamp',
+      logType: 'no',
+    };
+    // raw Snowplow events have unix timestamps
+    const enrichedMockRequestPath = '/com.snowplowanalytics.snowplow/enriched';
+
+    // for iso '2019-05-10T14:40:35.972Z'
+    const unixFromIso = 1557499235972;
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          time: unixFromIso,
+          os_name:
+            mockClientEvent['x-sp-contexts_nl_basjes_yauaa_context_1'][0]
+              .operatingSystemName,
+          os_version:
+            mockClientEvent['x-sp-contexts_nl_basjes_yauaa_context_1'][0]
+              .operatingSystemVersion,
+          device_brand:
+            mockClientEvent['x-sp-contexts_nl_basjes_yauaa_context_1'][0]
+              .deviceBrand,
+          device_model:
+            mockClientEvent['x-sp-contexts_nl_basjes_yauaa_context_1'][0]
+              .deviceName,
+          event_properties: {},
+          user_properties: {},
+          platform: mockClientEvent['x-sp-platform'],
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argCallback = arguments[1];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+    });
+    mock('getRequestPath', enrichedMockRequestPath);
+
+    // Call runCode to run the template's code
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
 setup: |-
   const json = require('JSON');
   const logToConsole = require('logToConsole');
@@ -1763,6 +2349,58 @@ setup: |-
     'x-ga-mp2-seg': '1',
     'x-ga-protocol_version': '2',
     'x-ga-page_id': 'a247ade1-06da-4823-ae33-db41d794a6cc',
+  };
+
+  const mockEventObjectEnriched = {
+    event_name: 'add_to_cart',
+    user_id: 'tester',
+    user_agent: 'python-requests/2.21.0',
+    host: 'host',
+    'x-sp-app_id': 'test-data<>',
+    'x-sp-platform': 'pc',
+    'x-sp-etl_tstamp': '2019-05-10T14:40:37.436Z',
+    'x-sp-collector_tstamp': '2019-05-10T14:40:35.972Z',
+    'x-sp-dvce_created_tstamp': '2019-05-10T14:40:35.551Z',
+    'x-sp-event': 'unstruct',
+    'x-sp-event_id': 'e9234345-f042-46ad-b1aa-424464066a33',
+    'x-sp-v_tracker': 'py-0.8.2',
+    'x-sp-v_collector': 'ssc-0.15.0-googlepubsub',
+    'x-sp-v_etl': 'beam-enrich-0.2.0-common-0.36.0',
+    'x-sp-network_userid': 'd26822f5-52cc-4292-8f77-14ef6b7a27e2',
+    'x-sp-dvce_sent_tstamp': '2019-05-10T14:40:35Z',
+    'x-sp-derived_tstamp': '2019-05-10T14:40:35.972Z',
+    'x-sp-event_vendor': 'com.snowplowanalytics.snowplow',
+    'x-sp-event_name': 'add_to_cart',
+    'x-sp-event_format': 'jsonschema',
+    'x-sp-event_version': '1-0-0',
+    'x-sp-contexts_nl_basjes_yauaa_context_1': [
+      {
+        agentClass: 'Special',
+        agentName: 'python-requests',
+        agentNameVersion: 'python-requests 2.21.0',
+        agentNameVersionMajor: 'python-requests 2',
+        agentVersion: '2.21.0',
+        agentVersionMajor: '2',
+        deviceBrand: 'Unknown',
+        deviceClass: 'Unknown',
+        deviceName: 'Unknown',
+        layoutEngineClass: 'Unknown',
+        layoutEngineName: 'Unknown',
+        layoutEngineVersion: '??',
+        layoutEngineVersionMajor: '??',
+        operatingSystemClass: 'Unknown',
+        operatingSystemName: 'Unknown',
+        operatingSystemVersion: '??',
+      },
+    ],
+    'x-sp-self_describing_event_com_snowplowanalytics_snowplow_add_to_cart_1': {
+      currency: 'GBP',
+      quantity: 2,
+      sku: 'item41',
+      unitPrice: 32.4,
+    },
+    'x-ga-mp2-seg': '1',
+    'x-ga-protocol_version': '2',
   };
 
   // Helper to mock getEventData
