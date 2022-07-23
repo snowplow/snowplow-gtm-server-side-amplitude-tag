@@ -890,6 +890,23 @@ const getAmplitudeTime = (tagConfig) => {
   }
 };
 
+/*
+ * Returns the session_id (long - unix timestamp) for Amplitude event
+ * from the firstEventTimestamp of the client_session context.
+ *
+ * @param evData {Object} - the client event object
+ * @returns - unix timestamp or undefined
+ */
+const getAmplitudeSession = (evData) => {
+  const clientSessionCtx =
+    evData['x-sp-contexts_com_snowplowanalytics_snowplow_client_session_1'];
+  if (clientSessionCtx) {
+    const firstEventTime = clientSessionCtx[0].firstEventTimestamp;
+    return isoToUnixMillis(firstEventTime);
+  }
+  return undefined;
+};
+
 // Main
 const eventData = getAllEventData();
 
@@ -952,6 +969,7 @@ let amplitudeEvent = {
   device_id: eventData.client_id,
   ip: data.forwardIp ? eventData.ip_override : undefined,
   time: getAmplitudeTime(data),
+  session_id: getAmplitudeSession(eventData),
   event_properties: eventProperties,
   user_properties: userProperties,
   platform: platform,
@@ -1305,6 +1323,7 @@ scenarios:
 - name: Test Self-Describing include option
   code: |
     const mockClientEvent = mockEventObjectSelfDesc;
+    const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
     const mockData = {
       apiKey: '12345',
       useEUServer: true,
@@ -1325,6 +1344,7 @@ scenarios:
         {
           event_type: mockClientEvent.event_name,
           device_id: mockClientEvent.client_id,
+          session_id: firstEvTimeUnixMillis,
           event_properties: {
             page_location: mockClientEvent.page_location,
             page_encoding: mockClientEvent.page_encoding,
@@ -1347,6 +1367,10 @@ scenarios:
             'contexts_com_google_tag-manager_server-side_user_data_1':
               mockClientEvent[
                 'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
+              ][0],
+            contexts_com_snowplowanalytics_snowplow_client_session_1:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_client_session_1'
               ][0],
           },
           user_properties: {
@@ -1411,6 +1435,7 @@ scenarios:
 - name: Test contexts no extract
   code: |
     const mockClientEvent = mockEventObjectSelfDesc;
+    const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
     const mockData = {
       apiKey: '12345',
       useEUServer: false,
@@ -1432,6 +1457,7 @@ scenarios:
         {
           event_type: mockClientEvent.event_name,
           device_id: mockClientEvent.client_id,
+          session_id: firstEvTimeUnixMillis,
           event_properties: {
             page_location: mockClientEvent.page_location,
             page_encoding: mockClientEvent.page_encoding,
@@ -1450,6 +1476,10 @@ scenarios:
             'contexts_com_google_tag-manager_server-side_user_data_1':
               mockClientEvent[
                 'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
+              ],
+            contexts_com_snowplowanalytics_snowplow_client_session_1:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_client_session_1'
               ],
           },
           user_properties: {
@@ -1514,6 +1544,7 @@ scenarios:
 - name: Test event context rules
   code: |
     const mockClientEvent = mockEventObjectSelfDesc;
+    const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
     const mockData = {
       apiKey: '12345',
       useEUServer: false,
@@ -1552,6 +1583,7 @@ scenarios:
         {
           event_type: mockClientEvent.event_name,
           device_id: mockClientEvent.client_id,
+          session_id: firstEvTimeUnixMillis,
           event_properties: {
             page_location: mockClientEvent.page_location,
             page_encoding: mockClientEvent.page_encoding,
@@ -1630,7 +1662,7 @@ scenarios:
 - name: Test additional event mapping options
   code: |
     const mockClientEvent = mockEventObjectSelfDesc;
-
+    const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
     const mockData = {
       apiKey: '12345',
       useEUServer: false,
@@ -1668,6 +1700,7 @@ scenarios:
         {
           event_type: mockClientEvent.event_name,
           device_id: mockClientEvent.client_id,
+          session_id: firstEvTimeUnixMillis,
           event_properties: {
             media_event_type: 'play',
             tracker: mockClientEvent['x-sp-tp2'].tv,
@@ -2003,6 +2036,7 @@ scenarios:
     const makeNum = require('makeNumber');
 
     const mockClientEvent = mockEventObjectSelfDesc;
+    const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
     const mockData = {
       apiKey: '12345',
       useEUServer: false,
@@ -2026,6 +2060,7 @@ scenarios:
         {
           event_type: mockClientEvent.event_name,
           device_id: mockClientEvent.client_id,
+          session_id: firstEvTimeUnixMillis,
           time: makeNum(mockClientEvent['x-sp-dvce_created_tstamp']),
           event_properties: {},
           user_properties: {},
@@ -2139,7 +2174,6 @@ setup: |-
   const json = require('JSON');
   const logToConsole = require('logToConsole');
   const getTypeOf = require('getType');
-
   const mockEventObjectPageView = {
     event_name: 'page_view',
     client_id: 'd54a1904-7798-401a-be0b-1a83bea73634',
@@ -2193,10 +2227,9 @@ setup: |-
     'x-ga-protocol_version': '2',
     'x-ga-page_id': 'a86c42e5-b831-45c8-b706-e214c26b4b3d',
   };
-
   const mockEventObjectSelfDesc = {
     event_name: 'media_player_event',
-    client_id: '74b3b330-6cae-400f-949d-e6d13c6784ba',
+    client_id: 'fd0e5288-e89b-45df-aad5-6d0c6eda6198',
     language: 'en-US',
     page_encoding: 'windows-1252',
     page_hostname: 'localhost',
@@ -2204,30 +2237,30 @@ setup: |-
     page_path: '/',
     screen_resolution: '1920x1080',
     user_id: 'tester',
-    viewport_size: '1235x975',
+    viewport_size: '1044x975',
     user_agent: 'curl/7.81.0',
     host: 'host',
     'x-sp-app_id': 'media-test',
-    'x-sp-platform': 'tv',
-    'x-sp-dvce_created_tstamp': '1658251401583',
-    'x-sp-event_id': '2f6656c4-3e86-4ad6-8584-987e6be6e90b',
+    'x-sp-platform': 'web',
+    'x-sp-dvce_created_tstamp': '1658567928426',
+    'x-sp-event_id': 'c2084e30-5e4f-4d9c-86b2-e0bc3781509a',
     'x-sp-name_tracker': 'spTest',
     'x-sp-v_tracker': 'js-3.5.0',
-    'x-sp-domain_sessionid': '3628400a-540f-4fad-8d88-1e405bd55cd8',
+    'x-sp-domain_sessionid': '1ab28b79-bfdd-4855-9bf1-5199ce15beac',
     'x-sp-domain_sessionidx': 1,
     'x-sp-br_cookies': '1',
     'x-sp-br_colordepth': '24',
-    'x-sp-br_viewwidth': 1235,
+    'x-sp-br_viewwidth': 1044,
     'x-sp-br_viewheight': 975,
     'x-sp-dvce_screenwidth': 1920,
     'x-sp-dvce_screenheight': 1080,
     'x-sp-doc_charset': 'windows-1252',
-    'x-sp-doc_width': 1235,
+    'x-sp-doc_width': 1044,
     'x-sp-doc_height': 975,
-    'x-sp-dvce_sent_tstamp': '1658251401586',
+    'x-sp-dvce_sent_tstamp': '1658567928427',
     'x-sp-tp2': {
       e: 'ue',
-      eid: '2f6656c4-3e86-4ad6-8584-987e6be6e90b',
+      eid: 'c2084e30-5e4f-4d9c-86b2-e0bc3781509a',
       tv: 'js-3.5.0',
       tna: 'spTest',
       aid: 'media-test',
@@ -2238,18 +2271,18 @@ setup: |-
       res: '1920x1080',
       cd: '24',
       tz: 'Europe/Athens',
-      dtm: '1658251401583',
-      vp: '1235x975',
-      ds: '1235x975',
+      dtm: '1658567928426',
+      vp: '1044x975',
+      ds: '1044x975',
       vid: '1',
-      sid: '3628400a-540f-4fad-8d88-1e405bd55cd8',
-      duid: '74b3b330-6cae-400f-949d-e6d13c6784ba',
+      sid: '1ab28b79-bfdd-4855-9bf1-5199ce15beac',
+      duid: 'fd0e5288-e89b-45df-aad5-6d0c6eda6198',
       uid: 'tester',
       url: 'http://localhost:8000/',
       ue_pr:
         '{"schema":"iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0","data":{"schema":"iglu:com.snowplowanalytics.snowplow/media_player_event/jsonschema/1-0-0","data":{"type":"play"}}}',
-      co: '{"schema":"iglu:com.snowplowanalytics.snowplow/contexts/jsonschema/1-0-0","data":[{"schema":"iglu:com.youtube/youtube/jsonschema/1-0-0","data":{"autoPlay":false,"avaliablePlaybackRates":[0.25,0.5,0.75,1,1.25,1.5,1.75,2],"buffering":false,"controls":true,"cued":false,"loaded":2,"playbackQuality":"medium","playerId":"youtube-song","unstarted":false,"url":"https://www.youtube.com/watch?v=Yy5cKX4jBkQ","avaliableQualityLevels":["hd1080","hd720","large","medium","small","tiny","auto"]}},{"schema":"iglu:com.snowplowanalytics.snowplow/media_player/jsonschema/1-0-0","data":{"currentTime":0.01755785504150391,"duration":222.041,"ended":false,"loop":false,"muted":false,"paused":false,"playbackRate":1,"volume":100}},{"schema":"iglu:com.snowplowanalytics.snowplow/web_page/jsonschema/1-0-0","data":{"id":"a247ade1-06da-4823-ae33-db41d794a6cc"}},{"schema":"iglu:com.google.tag-manager.server-side/user_data/jsonschema/1-0-0","data":{"email_address":"foo@test.io"}}]}',
-      stm: '1658251401586',
+      co: '{"schema":"iglu:com.snowplowanalytics.snowplow/contexts/jsonschema/1-0-0","data":[{"schema":"iglu:com.youtube/youtube/jsonschema/1-0-0","data":{"autoPlay":false,"avaliablePlaybackRates":[0.25,0.5,0.75,1,1.25,1.5,1.75,2],"buffering":false,"controls":true,"cued":false,"loaded":3,"playbackQuality":"medium","playerId":"youtube-song","unstarted":false,"url":"https://www.youtube.com/watch?v=XCQK6LmhYqc","avaliableQualityLevels":["hd1080","hd720","large","medium","small","tiny","auto"]}},{"schema":"iglu:com.snowplowanalytics.snowplow/media_player/jsonschema/1-0-0","data":{"currentTime":0.015303093460083008,"duration":190.301,"ended":false,"loop":false,"muted":false,"paused":false,"playbackRate":1,"volume":100}},{"schema":"iglu:com.snowplowanalytics.snowplow/web_page/jsonschema/1-0-0","data":{"id":"68027aa2-34b1-4018-95e3-7176c62dbc84"}},{"schema":"iglu:com.google.tag-manager.server-side/user_data/jsonschema/1-0-0","data":{"email_address":"foo@test.io"}},{"schema":"iglu:com.snowplowanalytics.snowplow/client_session/jsonschema/1-0-2","data":{"userId":"fd0e5288-e89b-45df-aad5-6d0c6eda6198","sessionId":"1ab28b79-bfdd-4855-9bf1-5199ce15beac","eventIndex":24,"sessionIndex":1,"previousSessionId":null,"storageMechanism":"COOKIE_1","firstEventId":"40fbdb30-1b99-42a3-99f7-850dacf5be43","firstEventTimestamp":"2022-07-23T09:08:04.451Z"}}]}',
+      stm: '1658567928427',
     },
     'x-sp-self_describing_event_com_snowplowanalytics_snowplow_media_player_event_1':
       { type: 'play' },
@@ -2260,11 +2293,11 @@ setup: |-
         buffering: false,
         controls: true,
         cued: false,
-        loaded: 2,
+        loaded: 3,
         playbackQuality: 'medium',
         playerId: 'youtube-song',
         unstarted: false,
-        url: 'https://www.youtube.com/watch?v=Yy5cKX4jBkQ',
+        url: 'https://www.youtube.com/watch?v=XCQK6LmhYqc',
         avaliableQualityLevels: [
           'hd1080',
           'hd720',
@@ -2278,8 +2311,8 @@ setup: |-
     ],
     'x-sp-contexts_com_snowplowanalytics_snowplow_media_player_1': [
       {
-        currentTime: 0.01755785504150391,
-        duration: 222.041,
+        currentTime: 0.015303093460083008,
+        duration: 190.301,
         ended: false,
         loop: false,
         muted: false,
@@ -2289,10 +2322,22 @@ setup: |-
       },
     ],
     'x-sp-contexts_com_snowplowanalytics_snowplow_web_page_1': [
-      { id: 'a247ade1-06da-4823-ae33-db41d794a6cc' },
+      { id: '68027aa2-34b1-4018-95e3-7176c62dbc84' },
     ],
     'x-sp-contexts_com_google_tag-manager_server-side_user_data_1': [
       { email_address: 'foo@test.io' },
+    ],
+    'x-sp-contexts_com_snowplowanalytics_snowplow_client_session_1': [
+      {
+        userId: 'fd0e5288-e89b-45df-aad5-6d0c6eda6198',
+        sessionId: '1ab28b79-bfdd-4855-9bf1-5199ce15beac',
+        eventIndex: 24,
+        sessionIndex: 1,
+        previousSessionId: null,
+        storageMechanism: 'COOKIE_1',
+        firstEventId: '40fbdb30-1b99-42a3-99f7-850dacf5be43',
+        firstEventTimestamp: '2022-07-23T09:08:04.451Z',
+      },
     ],
     'x-sp-contexts': [
       {
@@ -2303,11 +2348,11 @@ setup: |-
           buffering: false,
           controls: true,
           cued: false,
-          loaded: 2,
+          loaded: 3,
           playbackQuality: 'medium',
           playerId: 'youtube-song',
           unstarted: false,
-          url: 'https://www.youtube.com/watch?v=Yy5cKX4jBkQ',
+          url: 'https://www.youtube.com/watch?v=XCQK6LmhYqc',
           avaliableQualityLevels: [
             'hd1080',
             'hd720',
@@ -2323,8 +2368,8 @@ setup: |-
         schema:
           'iglu:com.snowplowanalytics.snowplow/media_player/jsonschema/1-0-0',
         data: {
-          currentTime: 0.01755785504150391,
-          duration: 222.041,
+          currentTime: 0.015303093460083008,
+          duration: 190.301,
           ended: false,
           loop: false,
           muted: false,
@@ -2335,22 +2380,35 @@ setup: |-
       },
       {
         schema: 'iglu:com.snowplowanalytics.snowplow/web_page/jsonschema/1-0-0',
-        data: { id: 'a247ade1-06da-4823-ae33-db41d794a6cc' },
+        data: { id: '68027aa2-34b1-4018-95e3-7176c62dbc84' },
       },
       {
         schema:
           'iglu:com.google.tag-manager.server-side/user_data/jsonschema/1-0-0',
         data: { email_address: 'foo@test.io' },
       },
+      {
+        schema:
+          'iglu:com.snowplowanalytics.snowplow/client_session/jsonschema/1-0-2',
+        data: {
+          userId: 'fd0e5288-e89b-45df-aad5-6d0c6eda6198',
+          sessionId: '1ab28b79-bfdd-4855-9bf1-5199ce15beac',
+          eventIndex: 24,
+          sessionIndex: 1,
+          previousSessionId: null,
+          storageMechanism: 'COOKIE_1',
+          firstEventId: '40fbdb30-1b99-42a3-99f7-850dacf5be43',
+          firstEventTimestamp: '2022-07-23T09:08:04.451Z',
+        },
+      },
     ],
     user_data: { email_address: 'foo@test.io' },
-    ga_session_id: '3628400a-540f-4fad-8d88-1e405bd55cd8',
+    ga_session_id: '1ab28b79-bfdd-4855-9bf1-5199ce15beac',
     ga_session_number: '1',
     'x-ga-mp2-seg': '1',
     'x-ga-protocol_version': '2',
-    'x-ga-page_id': 'a247ade1-06da-4823-ae33-db41d794a6cc',
+    'x-ga-page_id': '68027aa2-34b1-4018-95e3-7176c62dbc84',
   };
-
   const mockEventObjectEnriched = {
     event_name: 'add_to_cart',
     user_id: 'tester',
@@ -2402,7 +2460,6 @@ setup: |-
     'x-ga-mp2-seg': '1',
     'x-ga-protocol_version': '2',
   };
-
   // Helper to mock getEventData
   const getFromPath = (path, obj) => {
     if (getTypeOf(path) === 'string' && getTypeOf(obj) === 'object') {
@@ -2416,3 +2473,5 @@ setup: |-
 ___NOTES___
 
 Created on 07/11/2021, 21:19:43
+
+
