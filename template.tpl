@@ -226,6 +226,14 @@ ___TEMPLATE_PARAMETERS___
             "help": "Include the user_data properties from the common event definition in the Amplitude `userProperties` object"
           },
           {
+            "type": "CHECKBOX",
+            "name": "mktToUserUtm",
+            "checkboxText": "Map Snowplow mkt fields (standard UTM parameters) to user properties",
+            "simpleValueType": true,
+            "help": "Enable this option if you want all the `mkt_` fields of the Snowplow event to be automatically mapped to the standard UTM parameters in user properties.",
+            "defaultValue": false
+          },
+          {
             "type": "SIMPLE_TABLE",
             "name": "userMappingRules",
             "displayName": "Additional User Property Mapping Rules",
@@ -452,6 +460,13 @@ const spAtomicTstamps = [
   'x-sp-dvce_sent_tstamp',
   'x-sp-etl_tstamp',
   'x-sp-refr_dvce_tstamp',
+];
+const mktToUtmMap = [
+  { key: 'x-sp-mkt_source', mappedKey: 'utm_source' },
+  { key: 'x-sp-mkt_medium', mappedKey: 'utm_medium' },
+  { key: 'x-sp-mkt_campaign', mappedKey: 'utm_campaign' },
+  { key: 'x-sp-mkt_term', mappedKey: 'utm_term' },
+  { key: 'x-sp-mkt_content', mappedKey: 'utm_content' },
 ];
 
 // Helpers
@@ -859,6 +874,36 @@ const parseCustomEventAndEntities = (
 };
 
 /*
+ * Initializes the user_properties of the Ampitude event
+ * based on the User Property Rules of the tag configuration.
+ *
+ * @param evData {Object} - the client event object
+ * @param tagConfig {Object} - the tag configuration
+ * @returns - Object
+ */
+const initUserData = (evData, tagConfig) => {
+  // include common user properties
+  const includeCommon = !!(
+    data.includeCommonUserProperties && eventData.user_data
+  );
+  const commonUserData = includeCommon ? eventData.user_data : {};
+
+  // map Snowplow mkt fields
+  const utmData = tagConfig.mktToUserUtm ? mktToUtmMap : [];
+
+  // additional user property mapping rules
+  const includeCustom = !!(
+    data.userMappingRules && data.userMappingRules.length > 0
+  );
+  const userMappingRules = includeCustom ? data.userMappingRules : [];
+
+  // additional rules take precedence
+  const additionalUserProps = utmData.concat(userMappingRules);
+
+  return merge([commonUserData, getEventDataByKeys(additionalUserProps)]);
+};
+
+/*
  * Returns the time property for Amplitude event
  * depending on time settings configured.
  *
@@ -924,17 +969,7 @@ const requestHeaders = {
   timeout: 5000,
 };
 
-let userProperties = {};
-if (data.includeCommonUserProperties && eventData.user_data) {
-  userProperties = eventData.user_data;
-}
-
-if (data.userMappingRules && data.userMappingRules.length > 0) {
-  userProperties = merge([
-    userProperties,
-    getEventDataByKeys(data.userMappingRules),
-  ]);
-}
+let userProperties = initUserData(eventData, data);
 
 let eventProperties = {};
 if (data.includeCommonEventProperties) {
@@ -1235,6 +1270,7 @@ scenarios:
       includeAllEntities: true,
       includeCommonEventProperties: true,
       includeCommonUserProperties: true,
+      mktToUserUtm: false,
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
@@ -1332,6 +1368,7 @@ scenarios:
       includeAllEntities: true,
       includeCommonEventProperties: true,
       includeCommonUserProperties: true,
+      mktToUserUtm: false,
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
@@ -1444,6 +1481,7 @@ scenarios:
       includeAllEntities: true,
       includeCommonEventProperties: true,
       includeCommonUserProperties: true,
+      mktToUserUtm: false,
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
@@ -1571,6 +1609,7 @@ scenarios:
       ],
       includeCommonEventProperties: true,
       includeCommonUserProperties: true,
+      mktToUserUtm: false,
       forwardIp: false,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
@@ -1682,6 +1721,7 @@ scenarios:
         },
       ],
       includeCommonUserProperties: false,
+      mktToUserUtm: false,
       userMappingRules: [
         {
           key: 'user_data.email_address',
@@ -1775,6 +1815,7 @@ scenarios:
       includeAllEntities: false,
       includeCommonEventProperties: false,
       includeCommonUserProperties: false,
+      mktToUserUtm: false,
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
@@ -1890,6 +1931,7 @@ scenarios:
       includeAllEntities: true,
       includeCommonEventProperties: true,
       includeCommonUserProperties: true,
+      mktToUserUtm: false,
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
@@ -1925,6 +1967,7 @@ scenarios:
       includeAllEntities: false,
       includeCommonEventProperties: false,
       includeCommonUserProperties: false,
+      mktToUserUtm: false,
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'current',
@@ -1984,6 +2027,7 @@ scenarios:
       includeAllEntities: false,
       includeCommonEventProperties: false,
       includeCommonUserProperties: false,
+      mktToUserUtm: false,
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'eventProperty',
@@ -2045,6 +2089,7 @@ scenarios:
       includeAllEntities: false,
       includeCommonEventProperties: false,
       includeCommonUserProperties: false,
+      mktToUserUtm: false,
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'eventProperty',
@@ -2107,6 +2152,7 @@ scenarios:
       includeAllEntities: false,
       includeCommonEventProperties: false,
       includeCommonUserProperties: false,
+      mktToUserUtm: false,
       forwardIp: true,
       fallbackPlatform: 'srv',
       amplitudeTime: 'eventProperty',
@@ -2170,6 +2216,175 @@ scenarios:
 
     const body = json.parse(argBody);
     assertThat(body).isEqualTo(expectedBody);
+- name: Test mkt fields mapping
+  code: |
+    const mockClientEvent = mockEventObjectPageView;
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: true,
+      includeAllEntities: false,
+      includeCommonEventProperties: false,
+      includeCommonUserProperties: false,
+      mktToUserUtm: true,
+      userMappingRules: [
+        {
+          key: 'language',
+          mappedKey: 'lang',
+        },
+      ],
+      forwardIp: true,
+      fallbackPlatform: 'web',
+      amplitudeTime: 'no',
+      logType: 'debug',
+    };
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          event_properties: {},
+          user_properties: {
+            lang: mockClientEvent.language,
+            utm_source: mockClientEvent['x-sp-mkt_source'],
+            utm_medium: mockClientEvent['x-sp-mkt_medium'],
+            utm_campaign: mockClientEvent['x-sp-mkt_campaign'],
+            utm_term: mockClientEvent['x-sp-mkt_term'],
+            utm_content: mockClientEvent['x-sp-mkt_content'],
+          },
+          platform: mockData.fallbackPlatform,
+          language: mockClientEvent.language,
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argCallback = arguments[1];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+    });
+    mock('getContainerVersion', function () {
+      let containerVersion = {
+        debugMode: true,
+        previewMode: true,
+      };
+      return containerVersion;
+    });
+
+    // Call runCode to run the template's code
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+    const expectedUrl = 'https://api2.amplitude.com/2/httpapi';
+    assertThat(argUrl).isStrictlyEqualTo(expectedUrl);
+
+    assertThat(argOptions.method).isStrictlyEqualTo('POST');
+    assertThat(argOptions.timeout).isStrictlyEqualTo(5000);
+    assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo(
+      'application/json'
+    );
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
+- name: Test mapping precedence
+  code: |
+    const mockClientEvent = mockEventObjectPageView;
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: true,
+      includeAllEntities: false,
+      includeCommonEventProperties: false,
+      includeCommonUserProperties: false,
+      mktToUserUtm: true,
+      userMappingRules: [
+        {
+          key: 'language',
+          mappedKey: 'utm_term',
+        },
+      ],
+      forwardIp: true,
+      fallbackPlatform: 'web',
+      amplitudeTime: 'no',
+      logType: 'debug',
+    };
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          event_properties: {},
+          user_properties: {
+            utm_source: mockClientEvent['x-sp-mkt_source'],
+            utm_medium: mockClientEvent['x-sp-mkt_medium'],
+            utm_campaign: mockClientEvent['x-sp-mkt_campaign'],
+            utm_term: mockClientEvent.language,
+            utm_content: mockClientEvent['x-sp-mkt_content'],
+          },
+          platform: mockData.fallbackPlatform,
+          language: mockClientEvent.language,
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argCallback = arguments[1];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+    });
+    mock('getContainerVersion', function () {
+      let containerVersion = {
+        debugMode: true,
+        previewMode: true,
+      };
+      return containerVersion;
+    });
+
+    // Call runCode to run the template's code
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+    const expectedUrl = 'https://api2.amplitude.com/2/httpapi';
+    assertThat(argUrl).isStrictlyEqualTo(expectedUrl);
+
+    assertThat(argOptions.method).isStrictlyEqualTo('POST');
+    assertThat(argOptions.timeout).isStrictlyEqualTo(5000);
+    assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo(
+      'application/json'
+    );
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
 setup: |-
   const json = require('JSON');
   const logToConsole = require('logToConsole');
@@ -2195,6 +2410,11 @@ setup: |-
       email_address: 'test@example.com',
     },
     'x-sp-event_id': '7e1e4208-054a-4acc-a83e-a9bca5e60bd0',
+    'x-sp-mkt_medium': 'test-mkt-medium',
+    'x-sp-mkt_source': 'test-mkt-source',
+    'x-sp-mkt_term': 'test-mkt-term',
+    'x-sp-mkt_content': 'test-mkt-content',
+    'x-sp-mkt_campaign': 'test-mkt-campaign',
     'x-sp-contexts_com_snowplowanalytics_snowplow_web_page_1': {
       id: 'a86c42e5-b831-45c8-b706-e214c26b4b3d',
     },
@@ -2473,5 +2693,3 @@ setup: |-
 ___NOTES___
 
 Created on 07/11/2021, 21:19:43
-
-
