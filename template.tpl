@@ -81,32 +81,27 @@ ___TEMPLATE_PARAMETERS___
             "enablingConditions": []
           },
           {
-            "type": "CHECKBOX",
-            "name": "includeAllEntities",
-            "checkboxText": "Include all Entities in event_properties",
-            "simpleValueType": true,
-            "defaultValue": true,
-            "alwaysInSummary": true
-          },
-          {
-            "type": "CHECKBOX",
-            "name": "includeUnmappedEntities",
-            "checkboxText": "Include unmapped entities in event_properties",
-            "simpleValueType": true,
-            "defaultValue": false,
-            "help": "Any entites not found by the below mapping rules will be included in the event_properties",
-            "enablingConditions": [
+            "type": "SELECT",
+            "name": "includeEntities",
+            "displayName": "Include Snowplow Entities in event_properties",
+            "macrosInSelect": false,
+            "selectItems": [
               {
-                "paramName": "includeAllEntities",
-                "paramValue": false,
-                "type": "EQUALS"
+                "value": "all",
+                "displayValue": "All"
+              },
+              {
+                "value": "none",
+                "displayValue": "None"
               }
-            ]
+            ],
+            "simpleValueType": true,
+            "defaultValue": "all"
           },
           {
             "type": "SIMPLE_TABLE",
             "name": "entityMappingRules",
-            "displayName": "Snowplow Entity Mapping",
+            "displayName": "Snowplow Entities to Add/Edit mapping",
             "simpleTableColumns": [
               {
                 "defaultValue": "",
@@ -153,11 +148,30 @@ ___TEMPLATE_PARAMETERS___
               }
             ],
             "alwaysInSummary": false,
-            "help": "Specify the Entity name from the GTM Event, and then key you could like to map it to or leave the mapped key blank to keep the same name. These entities will populate the Amplitude `eventProperties` object.",
+            "help": "Specify the Entity name from the GTM Event and the key you could like to map it to or leave the mapped key blank to keep the same name. Additionally specify whether to add in event_properties or user_properties of the Amplitude event."
+          },
+          {
+            "type": "SIMPLE_TABLE",
+            "name": "entityExclusionRules",
+            "displayName": "Snowplow Entities to Exclude",
+            "simpleTableColumns": [
+              {
+                "defaultValue": "",
+                "displayName": "Entity Name",
+                "name": "key",
+                "type": "TEXT",
+                "valueValidators": [
+                  {
+                    "type": "NON_EMPTY"
+                  }
+                ]
+              }
+            ],
+            "help": "Specify the Entities to exclude from the Amplitude event.",
             "enablingConditions": [
               {
-                "paramName": "includeAllEntities",
-                "paramValue": false,
+                "paramName": "includeEntities",
+                "paramValue": "all",
                 "type": "EQUALS"
               }
             ]
@@ -803,8 +817,17 @@ const toSnakeCase = (value) => {
 };
 
 const cleanPropertyName = (prop) => prop.replace('x-sp-', '');
-const extractFromArrayIfSingleElement = (arr) =>
-  arr.length === 1 && data.extractFromArray ? arr[0] : arr;
+
+const extractFromArrayIfSingleElement = (arr, tagConfig) =>
+  arr.length === 1 && tagConfig.extractFromArray ? arr[0] : arr;
+
+/*
+ * Parses a Snowplow schema to the expected major version format,
+ *  also prefixed so as to match the contexts' output of the Snowplow Client.
+ *
+ * @param schema {string} - the input schema
+ * @returns - the expected output client event property
+ */
 const parseSchemaToMajorKeyValue = (schema) => {
   if (schema.indexOf('x-sp-contexts_') === 0) return schema;
   if (schema.indexOf('contexts_') === 0) return 'x-sp-' + schema;
@@ -827,46 +850,119 @@ const parseSchemaToMajorKeyValue = (schema) => {
   return schema;
 };
 
+/*
+ * Returns whether a property name is a Snowplow self-describing event property.
+ */
+const isSpSelfDescProp = (prop) => {
+  return prop.indexOf('x-sp-self_describing_event_') === 0;
+};
+
+/*
+ * Returns whether a property name is a Snowplow context/entity property.
+ */
+const isSpContextsProp = (prop) => {
+  return prop.indexOf('x-sp-contexts_') === 0;
+};
+
+/*
+ * Parses the entity exclusion rules from the tag configuration.
+ */
+const parseEntityExclusionRules = (tagConfig) => {
+  if (tagConfig.entityExclusionRules) {
+    const excludedEntities = tagConfig.entityExclusionRules.map((row) => {
+      const entityRef = parseSchemaToMajorKeyValue(row.key);
+      return entityRef;
+    });
+    return excludedEntities;
+  }
+  return [];
+};
+
+/*
+ * Given a list of entity references and an entity name,
+ * returns the index of a matching reference.
+ * Matching reference means whether the entity name starts with ref.
+ *
+ * @param entity {string} - the entity name to match
+ * @param refsList {Array} - an array of strings
+ */
+const getReferenceIdx = (entity, refsList) => {
+  for (let i = 0; i < refsList.length; i++) {
+    if (entity.indexOf(refsList[i]) === 0) {
+      return i;
+    }
+  }
+  return -1;
+};
+
+/*
+ * Parses the entity rules from the tag configuration.
+ */
+const parseEntityRules = (tagConfig) => {
+  if (tagConfig.entityMappingRules) {
+    const parsedRules = tagConfig.entityMappingRules.map((row) => {
+      const parsedKey = parseSchemaToMajorKeyValue(row.key);
+      return {
+        ref: parsedKey,
+        parsedKey: parsedKey,
+        mappedKey: row.mappedKey || cleanPropertyName(parsedKey),
+        target: row.propertiesObjectToPopulate,
+      };
+    });
+    return parsedRules;
+  }
+  return [];
+};
+
+/*
+ * Given the included and excluded entities rules,
+ * returns the final entity mapping rules.
+ */
+const finalizeEntityRules = (includedEntities, excludedEntities) => {
+  const finalEntities = includedEntities.filter((row) => {
+    const refIdx = getReferenceIdx(row.ref, excludedEntities);
+    return refIdx < 0;
+  });
+  return finalEntities;
+};
+
 const parseCustomEventAndEntities = (
-  eventData,
+  evData,
+  tagConfig,
   eventProperties,
   userProperties
 ) => {
-  for (let prop in eventData) {
-    if (eventData.hasOwnProperty(prop)) {
-      if (
-        data.includeSelfDescribingEvent &&
-        prop.indexOf('x-sp-self_describing_event_') === 0
-      ) {
-        eventProperties[cleanPropertyName(prop)] = eventData[prop];
+  const includedEntities = parseEntityRules(tagConfig);
+  const excludedEntities = parseEntityExclusionRules(tagConfig);
+  const finalEntityRules = finalizeEntityRules(
+    includedEntities,
+    excludedEntities
+  );
+  const finalEntityRefs = finalEntityRules.map((r) => r.ref);
+
+  for (let prop in evData) {
+    if (evData.hasOwnProperty(prop)) {
+      const cleanPropName = cleanPropertyName(prop);
+
+      if (isSpSelfDescProp(prop) && tagConfig.includeSelfDescribingEvent) {
+        eventProperties[cleanPropName] = evData[prop];
       }
 
-      if (data.includeAllEntities && prop.indexOf('x-sp-contexts_') === 0) {
-        eventProperties[cleanPropertyName(prop)] =
-          extractFromArrayIfSingleElement(eventData[prop]);
-      } else if (prop.indexOf('x-sp-contexts_') === 0) {
-        let mapped = false;
-        for (let entityRule in data.entityMappingRules) {
-          if (data.entityMappingRules.hasOwnProperty(entityRule)) {
-            const rule = data.entityMappingRules[entityRule];
-            const parsedSchemaKey = parseSchemaToMajorKeyValue(rule.key);
-
-            // Toggle which object to write entity to
-            const properties =
-              rule.propertiesObjectToPopulate === 'event_properties' ? eventProperties : userProperties;
-
-            if (prop === parsedSchemaKey) {
-              properties[rule.mappedKey || cleanPropertyName(parsedSchemaKey)] =
-                extractFromArrayIfSingleElement(eventData[prop]);
-              mapped = true;
-              break;
-            }
+      if (isSpContextsProp(prop)) {
+        const ctxVal = extractFromArrayIfSingleElement(evData[prop], tagConfig);
+        const refIdx = getReferenceIdx(prop, finalEntityRefs);
+        if (refIdx >= 0) {
+          const rule = finalEntityRules[refIdx];
+          const target =
+            rule.target === 'event_properties' ? eventProperties : userProperties;
+          target[rule.mappedKey] = ctxVal;
+        } else {
+          if (
+            tagConfig.includeEntities === 'all' &&
+            getReferenceIdx(prop, excludedEntities) < 0
+          ) {
+            eventProperties[cleanPropName] = ctxVal;
           }
-        }
-
-        if (!mapped && data.includeUnmappedEntities) {
-          eventProperties[cleanPropertyName(prop)] =
-            extractFromArrayIfSingleElement(eventData[prop]);
         }
       }
     }
@@ -988,7 +1084,7 @@ if (data.eventMappingRules && data.eventMappingRules.length > 0) {
   ]);
 }
 
-parseCustomEventAndEntities(eventData, eventProperties, userProperties);
+parseCustomEventAndEntities(eventData, data, eventProperties, userProperties);
 
 let insertId =
   eventData['x-sp-event_id'] ||
@@ -1267,7 +1363,7 @@ scenarios:
       useEUServer: false,
       includeSelfDescribingEvent: true,
       extractFromArray: true,
-      includeAllEntities: true,
+      includeEntities: 'all',
       includeCommonEventProperties: true,
       includeCommonUserProperties: true,
       mktToUserUtm: false,
@@ -1339,7 +1435,7 @@ scenarios:
       return containerVersion;
     });
 
-    // Call runCode to run the template's code.a
+    // Call runCode to run the template's code
     runCode(mockData);
 
     // Assert
@@ -1365,7 +1461,7 @@ scenarios:
       useEUServer: true,
       includeSelfDescribingEvent: true,
       extractFromArray: true,
-      includeAllEntities: true,
+      includeEntities: 'all',
       includeCommonEventProperties: true,
       includeCommonUserProperties: true,
       mktToUserUtm: false,
@@ -1452,7 +1548,7 @@ scenarios:
       return containerVersion;
     });
 
-    // Call runCode to run the template's code.a
+    // Call runCode to run the template's code
     runCode(mockData);
 
     // Assert
@@ -1478,7 +1574,7 @@ scenarios:
       useEUServer: false,
       includeSelfDescribingEvent: false,
       extractFromArray: false,
-      includeAllEntities: true,
+      includeEntities: 'all',
       includeCommonEventProperties: true,
       includeCommonUserProperties: true,
       mktToUserUtm: false,
@@ -1562,7 +1658,7 @@ scenarios:
       return containerVersion;
     });
 
-    // Call runCode to run the template's code.a
+    // Call runCode to run the template's code
     runCode(mockData);
 
     // Assert
@@ -1579,7 +1675,7 @@ scenarios:
     assertThat(body).isEqualTo(expectedBody);
 
     assertApi('logToConsole').wasNotCalled();
-- name: Test event context rules
+- name: Test context rules - include all
   code: |
     const mockClientEvent = mockEventObjectSelfDesc;
     const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
@@ -1588,8 +1684,131 @@ scenarios:
       useEUServer: false,
       includeSelfDescribingEvent: false,
       extractFromArray: true,
-      includeAllEntities: false,
-      includeUnmappedEntities: false,
+      includeEntities: 'all',
+      entityMappingRules: [
+        {
+          key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
+          mappedKey: 'youtube',
+          propertiesObjectToPopulate: 'event_properties',
+        },
+        {
+          key: 'contexts_com_snowplowanalytics_snowplow_media_player_1',
+          mappedKey: 'media_player',
+          propertiesObjectToPopulate: 'event_properties',
+        },
+        {
+          key: 'contexts_com_google_tag-manager_server-side_user_data_1',
+          mappedKey: 'user_data',
+          propertiesObjectToPopulate: 'user_properties',
+        },
+      ],
+      includeCommonEventProperties: true,
+      includeCommonUserProperties: true,
+      mktToUserUtm: false,
+      forwardIp: false,
+      fallbackPlatform: 'web',
+      amplitudeTime: 'no',
+      logType: 'no',
+    };
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          session_id: firstEvTimeUnixMillis,
+          event_properties: {
+            page_location: mockClientEvent.page_location,
+            page_encoding: mockClientEvent.page_encoding,
+            screen_resolution: mockClientEvent.screen_resolution,
+            viewport_size: mockClientEvent.viewport_size,
+            youtube: mockClientEvent['x-sp-contexts_com_youtube_youtube_1'][0],
+            media_player:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_media_player_1'
+              ][0],
+            contexts_com_snowplowanalytics_snowplow_web_page_1:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_web_page_1'
+              ][0],
+            contexts_com_snowplowanalytics_snowplow_client_session_1:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_client_session_1'
+              ][0],
+          },
+          user_properties: {
+            email_address: mockClientEvent.user_data.email_address,
+            user_data:
+              mockClientEvent[
+                'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
+              ][0],
+          },
+          language: mockClientEvent.language,
+          platform: mockClientEvent['x-sp-platform'],
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argCallback = arguments[1];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+
+      // mock response
+      const respStatusCode = 200;
+      const respHeaders = { foo: 'bar' };
+      const respBody = 'ok';
+
+      // and call the callback with mock response
+      argCallback(respStatusCode, respHeaders, respBody);
+    });
+    mock('getContainerVersion', function () {
+      let containerVersion = {
+        debugMode: true,
+        previewMode: true,
+      };
+      return containerVersion;
+    });
+
+    // Call runCode to run the template's code
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+    assertThat(argUrl).isStrictlyEqualTo('https://api2.amplitude.com/2/httpapi');
+
+    assertThat(argOptions.method).isStrictlyEqualTo('POST');
+    assertThat(argOptions.timeout).isStrictlyEqualTo(5000);
+    assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo(
+      'application/json'
+    );
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
+
+    assertApi('logToConsole').wasNotCalled();
+- name: Test context rules - include none
+  code: |
+    const mockClientEvent = mockEventObjectSelfDesc;
+    const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: true,
+      includeEntities: 'none',
       entityMappingRules: [
         {
           key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
@@ -1681,7 +1900,7 @@ scenarios:
       return containerVersion;
     });
 
-    // Call runCode to run the template's code.a
+    // Call runCode to run the template's code
     runCode(mockData);
 
     // Assert
@@ -1698,6 +1917,253 @@ scenarios:
     assertThat(body).isEqualTo(expectedBody);
 
     assertApi('logToConsole').wasCalled();
+- name: Test context rules - exclude
+  code: |
+    const mockClientEvent = mockEventObjectSelfDesc;
+    const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: true,
+      includeEntities: 'all',
+      entityMappingRules: [
+        {
+          key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
+          mappedKey: 'youtube',
+          propertiesObjectToPopulate: 'event_properties',
+        },
+        {
+          key: 'contexts_com_snowplowanalytics_snowplow_media_player_1',
+          mappedKey: 'media_player',
+          propertiesObjectToPopulate: 'event_properties',
+        },
+        {
+          key: 'contexts_com_google_tag-manager_server-side_user_data_1',
+          mappedKey: 'user_data',
+          propertiesObjectToPopulate: 'user_properties',
+        },
+      ],
+      entityExclusionRules: [
+        {
+          key: 'contexts_com_snowplowanalytics_snowplow_web_page_1',
+        },
+        {
+          key: 'iglu:com.snowplowanalytics.snowplow/client_session/jsonschema/1-0-2',
+        },
+      ],
+      includeCommonEventProperties: true,
+      includeCommonUserProperties: true,
+      mktToUserUtm: false,
+      forwardIp: false,
+      fallbackPlatform: 'web',
+      amplitudeTime: 'no',
+      logType: 'no',
+    };
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          session_id: firstEvTimeUnixMillis,
+          event_properties: {
+            page_location: mockClientEvent.page_location,
+            page_encoding: mockClientEvent.page_encoding,
+            screen_resolution: mockClientEvent.screen_resolution,
+            viewport_size: mockClientEvent.viewport_size,
+            youtube: mockClientEvent['x-sp-contexts_com_youtube_youtube_1'][0],
+            media_player:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_media_player_1'
+              ][0],
+          },
+          user_properties: {
+            email_address: mockClientEvent.user_data.email_address,
+            user_data:
+              mockClientEvent[
+                'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
+              ][0],
+          },
+          language: mockClientEvent.language,
+          platform: mockClientEvent['x-sp-platform'],
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argCallback = arguments[1];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+
+      // mock response
+      const respStatusCode = 200;
+      const respHeaders = { foo: 'bar' };
+      const respBody = 'ok';
+
+      // and call the callback with mock response
+      argCallback(respStatusCode, respHeaders, respBody);
+    });
+    mock('getContainerVersion', function () {
+      let containerVersion = {
+        debugMode: true,
+        previewMode: true,
+      };
+      return containerVersion;
+    });
+
+    // Call runCode to run the template's code
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+    assertThat(argUrl).isStrictlyEqualTo('https://api2.amplitude.com/2/httpapi');
+
+    assertThat(argOptions.method).isStrictlyEqualTo('POST');
+    assertThat(argOptions.timeout).isStrictlyEqualTo(5000);
+    assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo(
+      'application/json'
+    );
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
+
+    assertApi('logToConsole').wasNotCalled();
+- name: Test context rules - exclude priority
+  code: |
+    const mockClientEvent = mockEventObjectSelfDesc;
+    const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: true,
+      includeEntities: 'all',
+      entityMappingRules: [
+        {
+          key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
+          mappedKey: 'youtube',
+          propertiesObjectToPopulate: 'event_properties',
+        },
+        {
+          key: 'contexts_com_snowplowanalytics_snowplow_media_player_1',
+          mappedKey: 'media_player',
+          propertiesObjectToPopulate: 'event_properties',
+        },
+        {
+          key: 'contexts_com_google_tag-manager_server-side_user_data_1',
+          mappedKey: 'user_data',
+          propertiesObjectToPopulate: 'user_properties',
+        },
+      ],
+      entityExclusionRules: [
+        {
+          key: 'contexts_com_snowplowanalytics_snowplow_web_page_1',
+        },
+        {
+          key: 'iglu:com.snowplowanalytics.snowplow/client_session/jsonschema/1-0-2',
+        },
+        {
+          key: 'contexts_com_snowplowanalytics_snowplow_media_player_1',
+        },
+      ],
+      includeCommonEventProperties: true,
+      includeCommonUserProperties: true,
+      mktToUserUtm: false,
+      forwardIp: false,
+      fallbackPlatform: 'web',
+      amplitudeTime: 'no',
+      logType: 'no',
+    };
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          session_id: firstEvTimeUnixMillis,
+          event_properties: {
+            page_location: mockClientEvent.page_location,
+            page_encoding: mockClientEvent.page_encoding,
+            screen_resolution: mockClientEvent.screen_resolution,
+            viewport_size: mockClientEvent.viewport_size,
+            youtube: mockClientEvent['x-sp-contexts_com_youtube_youtube_1'][0],
+          },
+          user_properties: {
+            email_address: mockClientEvent.user_data.email_address,
+            user_data:
+              mockClientEvent[
+                'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
+              ][0],
+          },
+          language: mockClientEvent.language,
+          platform: mockClientEvent['x-sp-platform'],
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argCallback = arguments[1];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+
+      // mock response
+      const respStatusCode = 200;
+      const respHeaders = { foo: 'bar' };
+      const respBody = 'ok';
+
+      // and call the callback with mock response
+      argCallback(respStatusCode, respHeaders, respBody);
+    });
+    mock('getContainerVersion', function () {
+      let containerVersion = {
+        debugMode: true,
+        previewMode: true,
+      };
+      return containerVersion;
+    });
+
+    // Call runCode to run the template's code
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+    assertThat(argUrl).isStrictlyEqualTo('https://api2.amplitude.com/2/httpapi');
+
+    assertThat(argOptions.method).isStrictlyEqualTo('POST');
+    assertThat(argOptions.timeout).isStrictlyEqualTo(5000);
+    assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo(
+      'application/json'
+    );
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
+
+    assertApi('logToConsole').wasNotCalled();
 - name: Test additional event mapping options
   code: |
     const mockClientEvent = mockEventObjectSelfDesc;
@@ -1707,8 +2173,7 @@ scenarios:
       useEUServer: false,
       includeSelfDescribingEvent: false,
       extractFromArray: true,
-      includeAllEntities: false,
-      includeUnmappedEntities: false,
+      includeEntities: 'none',
       includeCommonEventProperties: false,
       eventMappingRules: [
         {
@@ -1812,7 +2277,7 @@ scenarios:
       useEUServer: false,
       includeSelfDescribingEvent: false,
       extractFromArray: true,
-      includeAllEntities: false,
+      includeEntities: 'none',
       includeCommonEventProperties: false,
       includeCommonUserProperties: false,
       mktToUserUtm: false,
@@ -1928,7 +2393,7 @@ scenarios:
       useEUServer: false,
       includeSelfDescribingEvent: true,
       extractFromArray: true,
-      includeAllEntities: true,
+      includeEntities: 'none',
       includeCommonEventProperties: true,
       includeCommonUserProperties: true,
       mktToUserUtm: false,
@@ -1964,7 +2429,7 @@ scenarios:
       useEUServer: false,
       includeSelfDescribingEvent: false,
       extractFromArray: true,
-      includeAllEntities: false,
+      includeEntities: 'none',
       includeCommonEventProperties: false,
       includeCommonUserProperties: false,
       mktToUserUtm: false,
@@ -2024,7 +2489,7 @@ scenarios:
       useEUServer: false,
       includeSelfDescribingEvent: false,
       extractFromArray: true,
-      includeAllEntities: false,
+      includeEntities: 'none',
       includeCommonEventProperties: false,
       includeCommonUserProperties: false,
       mktToUserUtm: false,
@@ -2086,7 +2551,7 @@ scenarios:
       useEUServer: false,
       includeSelfDescribingEvent: false,
       extractFromArray: true,
-      includeAllEntities: false,
+      includeEntities: 'none',
       includeCommonEventProperties: false,
       includeCommonUserProperties: false,
       mktToUserUtm: false,
@@ -2149,7 +2614,7 @@ scenarios:
       useEUServer: false,
       includeSelfDescribingEvent: false,
       extractFromArray: true,
-      includeAllEntities: false,
+      includeEntities: 'none',
       includeCommonEventProperties: false,
       includeCommonUserProperties: false,
       mktToUserUtm: false,
@@ -2224,7 +2689,7 @@ scenarios:
       useEUServer: false,
       includeSelfDescribingEvent: false,
       extractFromArray: true,
-      includeAllEntities: false,
+      includeEntities: 'none',
       includeCommonEventProperties: false,
       includeCommonUserProperties: false,
       mktToUserUtm: true,
@@ -2309,7 +2774,7 @@ scenarios:
       useEUServer: false,
       includeSelfDescribingEvent: false,
       extractFromArray: true,
-      includeAllEntities: false,
+      includeEntities: 'none',
       includeCommonEventProperties: false,
       includeCommonUserProperties: false,
       mktToUserUtm: true,
@@ -2693,3 +3158,5 @@ setup: |-
 ___NOTES___
 
 Created on 07/11/2021, 21:19:43
+
+
