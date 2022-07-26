@@ -145,10 +145,31 @@ ___TEMPLATE_PARAMETERS___
                     "type": "NON_EMPTY"
                   }
                 ]
+              },
+              {
+                "defaultValue": "control",
+                "displayName": "Apply to all versions",
+                "name": "version",
+                "type": "SELECT",
+                "selectItems": [
+                  {
+                    "value": "control",
+                    "displayValue": "False"
+                  },
+                  {
+                    "value": "free",
+                    "displayValue": "True"
+                  }
+                ],
+                "valueValidators": [
+                  {
+                    "type": "NON_EMPTY"
+                  }
+                ]
               }
             ],
             "alwaysInSummary": false,
-            "help": "Specify the Entity name from the GTM Event and the key you could like to map it to or leave the mapped key blank to keep the same name. Additionally specify whether to add in event_properties or user_properties of the Amplitude event."
+            "help": "Specify the Entity name from the GTM Event and the key you could like to map it to or leave the mapped key blank to keep the same name. Additionally specify whether to add in event_properties or user_properties of the Amplitude event and whether you wish the mapping to apply to all versions of the entity."
           },
           {
             "type": "SIMPLE_TABLE",
@@ -165,9 +186,30 @@ ___TEMPLATE_PARAMETERS___
                     "type": "NON_EMPTY"
                   }
                 ]
+              },
+              {
+                "defaultValue": "control",
+                "displayName": "Apply to all versions",
+                "name": "version",
+                "type": "SELECT",
+                "valueValidators": [
+                  {
+                    "type": "NON_EMPTY"
+                  }
+                ],
+                "selectItems": [
+                  {
+                    "value": "control",
+                    "displayValue": "False"
+                  },
+                  {
+                    "value": "free",
+                    "displayValue": "True"
+                  }
+                ]
               }
             ],
-            "help": "Specify the Entities to exclude from the Amplitude event.",
+            "help": "Specify the Entity name you want to exclude from the Amplitude event. Additionally, you can also set whether the exclusion applies to all versions of the entity.",
             "enablingConditions": [
               {
                 "paramName": "includeEntities",
@@ -865,20 +907,6 @@ const isSpContextsProp = (prop) => {
 };
 
 /*
- * Parses the entity exclusion rules from the tag configuration.
- */
-const parseEntityExclusionRules = (tagConfig) => {
-  if (tagConfig.entityExclusionRules) {
-    const excludedEntities = tagConfig.entityExclusionRules.map((row) => {
-      const entityRef = parseSchemaToMajorKeyValue(row.key);
-      return entityRef;
-    });
-    return excludedEntities;
-  }
-  return [];
-};
-
-/*
  * Given a list of entity references and an entity name,
  * returns the index of a matching reference.
  * Matching reference means whether the entity name starts with ref.
@@ -896,17 +924,61 @@ const getReferenceIdx = (entity, refsList) => {
 };
 
 /*
- * Parses the entity rules from the tag configuration.
+ * Filters out invalid rules to avoid unintended behavior.
+ * (e.g. version control being ignored if version num is not included in name)
+ * Assumes that a rule contains 'key' and 'version' properties.
+ */
+const cleanRules = (rules) => {
+  return rules.filter((row) => {
+    if (row.version === 'control') {
+      // last char can't be null or empty string so fine for makeNumber
+      const lastCharAsNum = makeNumber(row.key.slice(-1));
+      if (!lastCharAsNum && lastCharAsNum !== 0) {
+        // was not a digit, so invalid rule
+        return false;
+      }
+      return true;
+    }
+    return true;
+  });
+};
+
+/*
+ * Parses the entity exclusion rules from the tag configuration.
+ */
+const parseEntityExclusionRules = (tagConfig) => {
+  const rules = tagConfig.entityExclusionRules;
+  if (rules) {
+    const validRules = cleanRules(rules);
+    const excludedEntities = validRules.map((row) => {
+      const entityRef = parseSchemaToMajorKeyValue(row.key);
+      const versionFreeRef = entityRef.slice(0, -2);
+      return {
+        ref: row.version === 'control' ? entityRef : versionFreeRef,
+        version: row.version,
+      };
+    });
+    return excludedEntities;
+  }
+  return [];
+};
+
+/*
+ * Parses the entity inclusion rules from the tag configuration.
  */
 const parseEntityRules = (tagConfig) => {
-  if (tagConfig.entityMappingRules) {
-    const parsedRules = tagConfig.entityMappingRules.map((row) => {
+  const rules = tagConfig.entityMappingRules;
+  if (rules) {
+    const validRules = cleanRules(rules);
+    const parsedRules = validRules.map((row) => {
       const parsedKey = parseSchemaToMajorKeyValue(row.key);
+      const versionFreeKey = parsedKey.slice(0, -2);
       return {
-        ref: parsedKey,
+        ref: row.version === 'control' ? parsedKey : versionFreeKey,
         parsedKey: parsedKey,
         mappedKey: row.mappedKey || cleanPropertyName(parsedKey),
         target: row.propertiesObjectToPopulate,
+        version: row.version,
       };
     });
     return parsedRules;
@@ -915,12 +987,12 @@ const parseEntityRules = (tagConfig) => {
 };
 
 /*
- * Given the included and excluded entities rules,
+ * Given the inclusion rules and the excluded entity references,
  * returns the final entity mapping rules.
  */
-const finalizeEntityRules = (includedEntities, excludedEntities) => {
-  const finalEntities = includedEntities.filter((row) => {
-    const refIdx = getReferenceIdx(row.ref, excludedEntities);
+const finalizeEntityRules = (inclusionRules, excludedRefs) => {
+  const finalEntities = inclusionRules.filter((row) => {
+    const refIdx = getReferenceIdx(row.ref, excludedRefs);
     return refIdx < 0;
   });
   return finalEntities;
@@ -932,12 +1004,10 @@ const parseCustomEventAndEntities = (
   eventProperties,
   userProperties
 ) => {
-  const includedEntities = parseEntityRules(tagConfig);
-  const excludedEntities = parseEntityExclusionRules(tagConfig);
-  const finalEntityRules = finalizeEntityRules(
-    includedEntities,
-    excludedEntities
-  );
+  const inclusionRules = parseEntityRules(tagConfig);
+  const exclusionRules = parseEntityExclusionRules(tagConfig);
+  const excludedRefs = exclusionRules.map((r) => r.ref);
+  const finalEntityRules = finalizeEntityRules(inclusionRules, excludedRefs);
   const finalEntityRefs = finalEntityRules.map((r) => r.ref);
 
   for (let prop in evData) {
@@ -946,6 +1016,7 @@ const parseCustomEventAndEntities = (
 
       if (isSpSelfDescProp(prop) && tagConfig.includeSelfDescribingEvent) {
         eventProperties[cleanPropName] = evData[prop];
+        continue;
       }
 
       if (isSpContextsProp(prop)) {
@@ -957,10 +1028,11 @@ const parseCustomEventAndEntities = (
             rule.target === 'event_properties' ? eventProperties : userProperties;
           target[rule.mappedKey] = ctxVal;
         } else {
-          if (
-            tagConfig.includeEntities === 'all' &&
-            getReferenceIdx(prop, excludedEntities) < 0
-          ) {
+          if (tagConfig.includeEntities === 'none') {
+            continue;
+          }
+
+          if (getReferenceIdx(prop, excludedRefs) < 0) {
             eventProperties[cleanPropName] = ctxVal;
           }
         }
@@ -1690,16 +1762,19 @@ scenarios:
           key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
           mappedKey: 'youtube',
           propertiesObjectToPopulate: 'event_properties',
+          version: 'control',
         },
         {
           key: 'contexts_com_snowplowanalytics_snowplow_media_player_1',
           mappedKey: 'media_player',
           propertiesObjectToPopulate: 'event_properties',
+          version: 'control',
         },
         {
           key: 'contexts_com_google_tag-manager_server-side_user_data_1',
           mappedKey: 'user_data',
           propertiesObjectToPopulate: 'user_properties',
+          version: 'control',
         },
       ],
       includeCommonEventProperties: true,
@@ -1799,7 +1874,7 @@ scenarios:
     assertThat(body).isEqualTo(expectedBody);
 
     assertApi('logToConsole').wasNotCalled();
-- name: Test context rules - include none
+- name: Test context rules - include none - version control
   code: |
     const mockClientEvent = mockEventObjectSelfDesc;
     const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
@@ -1811,19 +1886,22 @@ scenarios:
       includeEntities: 'none',
       entityMappingRules: [
         {
-          key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
+          key: 'iglu:com.youtube/youtube/jsonschema/1-5-0',
           mappedKey: 'youtube',
           propertiesObjectToPopulate: 'event_properties',
+          version: 'free',
         },
         {
           key: 'contexts_com_snowplowanalytics_snowplow_media_player_1',
           mappedKey: 'media_player',
           propertiesObjectToPopulate: 'event_properties',
+          version: 'control',
         },
         {
-          key: 'contexts_com_google_tag-manager_server-side_user_data_1',
+          key: 'contexts_com_google_tag-manager_server-side_user_data_5',
           mappedKey: 'user_data',
           propertiesObjectToPopulate: 'user_properties',
+          version: 'free',
         },
       ],
       includeCommonEventProperties: true,
@@ -1917,7 +1995,7 @@ scenarios:
     assertThat(body).isEqualTo(expectedBody);
 
     assertApi('logToConsole').wasCalled();
-- name: Test context rules - exclude
+- name: Test context rules - exclude - version control
   code: |
     const mockClientEvent = mockEventObjectSelfDesc;
     const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
@@ -1932,24 +2010,29 @@ scenarios:
           key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
           mappedKey: 'youtube',
           propertiesObjectToPopulate: 'event_properties',
+          version: 'control',
         },
         {
           key: 'contexts_com_snowplowanalytics_snowplow_media_player_1',
           mappedKey: 'media_player',
           propertiesObjectToPopulate: 'event_properties',
+          version: 'control',
         },
         {
           key: 'contexts_com_google_tag-manager_server-side_user_data_1',
           mappedKey: 'user_data',
           propertiesObjectToPopulate: 'user_properties',
+          version: 'control',
         },
       ],
       entityExclusionRules: [
         {
           key: 'contexts_com_snowplowanalytics_snowplow_web_page_1',
+          version: 'control',
         },
         {
           key: 'iglu:com.snowplowanalytics.snowplow/client_session/jsonschema/1-0-2',
+          version: 'control',
         },
       ],
       includeCommonEventProperties: true,
@@ -2056,27 +2139,33 @@ scenarios:
           key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
           mappedKey: 'youtube',
           propertiesObjectToPopulate: 'event_properties',
+          version: 'control',
         },
         {
           key: 'contexts_com_snowplowanalytics_snowplow_media_player_1',
           mappedKey: 'media_player',
           propertiesObjectToPopulate: 'event_properties',
+          version: 'control',
         },
         {
           key: 'contexts_com_google_tag-manager_server-side_user_data_1',
           mappedKey: 'user_data',
           propertiesObjectToPopulate: 'user_properties',
+          version: 'control',
         },
       ],
       entityExclusionRules: [
         {
           key: 'contexts_com_snowplowanalytics_snowplow_web_page_1',
+          version: 'control',
         },
         {
           key: 'iglu:com.snowplowanalytics.snowplow/client_session/jsonschema/1-0-2',
+          version: 'control',
         },
         {
           key: 'contexts_com_snowplowanalytics_snowplow_media_player_1',
+          version: 'control',
         },
       ],
       includeCommonEventProperties: true,
@@ -2108,6 +2197,144 @@ scenarios:
               mockClientEvent[
                 'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
               ][0],
+          },
+          language: mockClientEvent.language,
+          platform: mockClientEvent['x-sp-platform'],
+          insert_id: mockClientEvent['x-sp-event_id'],
+          user_id: mockClientEvent.user_id,
+        },
+      ],
+    };
+
+    // to assert on
+    let argUrl, argCallback, argOptions, argBody;
+
+    // mocks
+    mock('getAllEventData', mockClientEvent);
+    mock('getEventData', function (x) {
+      return getFromPath(x, mockClientEvent);
+    });
+    mock('sendHttpRequest', function () {
+      argUrl = arguments[0];
+      argCallback = arguments[1];
+      argOptions = arguments[2];
+      argBody = arguments[3];
+
+      // mock response
+      const respStatusCode = 200;
+      const respHeaders = { foo: 'bar' };
+      const respBody = 'ok';
+
+      // and call the callback with mock response
+      argCallback(respStatusCode, respHeaders, respBody);
+    });
+    mock('getContainerVersion', function () {
+      let containerVersion = {
+        debugMode: true,
+        previewMode: true,
+      };
+      return containerVersion;
+    });
+
+    // Call runCode to run the template's code
+    runCode(mockData);
+
+    // Assert
+    assertApi('sendHttpRequest').wasCalled();
+    assertThat(argUrl).isStrictlyEqualTo('https://api2.amplitude.com/2/httpapi');
+
+    assertThat(argOptions.method).isStrictlyEqualTo('POST');
+    assertThat(argOptions.timeout).isStrictlyEqualTo(5000);
+    assertThat(argOptions.headers['Content-Type']).isStrictlyEqualTo(
+      'application/json'
+    );
+
+    const body = json.parse(argBody);
+    assertThat(body).isEqualTo(expectedBody);
+
+    assertApi('logToConsole').wasNotCalled();
+- name: Test context rules - many versions
+  code: |
+    const mockClientEvent = mockEventObjectSelfDesc;
+    // we want to test when a context is included version-less but excluded with version
+    // for an event that carries more than one version of same context
+    // so we add an imaginary context just for testing purposes
+    mockClientEvent['x-sp-contexts_com_youtube_youtube_5'] = [{ autoplay: true }];
+
+    const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
+    const mockData = {
+      apiKey: '12345',
+      useEUServer: false,
+      includeSelfDescribingEvent: false,
+      extractFromArray: false,
+      includeEntities: 'all',
+      entityMappingRules: [
+        {
+          key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
+          mappedKey: 'youtube',
+          propertiesObjectToPopulate: 'event_properties',
+          version: 'free', // free include
+        },
+        {
+          key: 'contexts_com_snowplowanalytics_snowplow_media_player', // missing version num ok for free
+          mappedKey: 'media_player',
+          propertiesObjectToPopulate: 'event_properties',
+          version: 'free',
+        },
+        {
+          key: 'contexts_com_google_tag-manager_server-side_user_data_1',
+          mappedKey: 'user_data',
+          propertiesObjectToPopulate: 'user_properties',
+          version: 'control',
+        },
+      ],
+      entityExclusionRules: [
+        {
+          key: 'contexts_com_snowplowanalytics_snowplow_web_page_5',
+          version: 'free',
+        },
+        {
+          key: 'iglu:com.snowplowanalytics.snowplow/client_session/jsonschema/1-0-2',
+          version: 'control',
+        },
+        {
+          key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
+          version: 'control', // control exclude
+        },
+      ],
+      includeCommonEventProperties: true,
+      includeCommonUserProperties: true,
+      mktToUserUtm: false,
+      forwardIp: false,
+      fallbackPlatform: 'web',
+      amplitudeTime: 'no',
+      logType: 'no',
+    };
+
+    const expectedBody = {
+      api_key: mockData.apiKey,
+      events: [
+        {
+          event_type: mockClientEvent.event_name,
+          device_id: mockClientEvent.client_id,
+          session_id: firstEvTimeUnixMillis,
+          event_properties: {
+            page_location: mockClientEvent.page_location,
+            page_encoding: mockClientEvent.page_encoding,
+            screen_resolution: mockClientEvent.screen_resolution,
+            viewport_size: mockClientEvent.viewport_size,
+            youtube: mockClientEvent['x-sp-contexts_com_youtube_youtube_5'], // expect only version 5
+            media_player:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_media_player_1'
+              ],
+          },
+          user_properties: {
+            email_address: mockClientEvent.user_data.email_address,
+            user_data:
+              mockClientEvent[
+                'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
+              ],
           },
           language: mockClientEvent.language,
           platform: mockClientEvent['x-sp-platform'],
@@ -3158,5 +3385,3 @@ setup: |-
 ___NOTES___
 
 Created on 07/11/2021, 21:19:43
-
-
