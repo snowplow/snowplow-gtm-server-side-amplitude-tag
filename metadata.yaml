@@ -2,11 +2,24 @@ homepage: "https://www.snowplowanalytics.com"
 documentation: "https://docs.snowplowanalytics.com/docs/forwarding-events-to-destinations/forwarding-events/google-tag-manager-server-side/amplitude-tag-for-gtm-ss/"
 versions:
   # Latest version
+  - sha: 8c31f847ee98c770415503c30b2938a5739580c0
+    changeNotes: |2
+      Add version control naming as an option (#7)
+      Add option to include or exclude an entity (#6)
+      Add option to map Snowplow mkt fields to Amplitude UTM user properties (#8)
+      Set the Amplitude Session ID from client session context (#5)
+      Add option for mapping Amplitude time field (#13)
+      Standardize logs (#15)
+      Add tests for configuration options (#18)
+      Fix tests throwing internal error (#16)
+      Format template with prettier (#17)
+      Use new Amplitude Standard Server HTTP endpoint (#14)
+      Add EU Server Toggle (#9)
+  # Older versions
   - sha: 0afe7246684bfa5dd2bedb90c148969ab7972dec
     changeNotes: |2
       Update copyright to 2022 (#11)
       Fix typo that is breaking sending User Properties properly to Amplitude (#10)
-  # Older versions
   - sha: 6bd48b3397507e030dea9e34ad496520c4438538
     changeNotes: Update Documentation Links (#3)
   - sha: 91079e22b124c1e139af742f9593780f345a2114
