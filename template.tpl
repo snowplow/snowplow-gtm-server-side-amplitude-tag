@@ -3125,8 +3125,8 @@ setup: |-
     client_id: 'd54a1904-7798-401a-be0b-1a83bea73634',
     language: 'en-GB',
     page_encoding: 'UTF-8',
-    page_hostname: 'snowplowanalytics.com',
-    page_location: 'https://snowplowanalytics.com/',
+    page_hostname: 'snowplow.io',
+    page_location: 'https://snowplow.io/',
     page_path: '/',
     page_referrer: 'referer',
     page_title:
