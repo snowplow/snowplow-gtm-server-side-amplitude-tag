@@ -1020,6 +1020,10 @@ const parseCustomEventAndEntities = (
       }
 
       if (isSpContextsProp(prop)) {
+        if (getReferenceIdx(prop, excludedRefs) >= 0) {
+          continue;
+        }
+
         const ctxVal = extractFromArrayIfSingleElement(evData[prop], tagConfig);
         const refIdx = getReferenceIdx(prop, finalEntityRefs);
         if (refIdx >= 0) {
@@ -1031,10 +1035,8 @@ const parseCustomEventAndEntities = (
           if (tagConfig.includeEntities === 'none') {
             continue;
           }
-
-          if (getReferenceIdx(prop, excludedRefs) < 0) {
-            eventProperties[cleanPropName] = ctxVal;
-          }
+          // here includedEntities is 'all' and prop is not excluded
+          eventProperties[cleanPropName] = ctxVal;
         }
       }
     }
@@ -1747,7 +1749,7 @@ scenarios:
     assertThat(body).isEqualTo(expectedBody);
 
     assertApi('logToConsole').wasNotCalled();
-- name: Test context rules - include all
+- name: Test context rules - include all - edit
   code: |
     const mockClientEvent = mockEventObjectSelfDesc;
     const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
@@ -1758,6 +1760,12 @@ scenarios:
       extractFromArray: true,
       includeEntities: 'all',
       entityMappingRules: [
+        {
+          key: 'x-sp-contexts_com_snowplowanalytics_snowplow_mobile_context_1',
+          mappedKey: 'mobile_context',
+          propertiesObjectToPopulate: 'user_properties',
+          version: 'control',
+        },
         {
           key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
           mappedKey: 'youtube',
@@ -1772,7 +1780,7 @@ scenarios:
         },
         {
           key: 'contexts_com_google_tag-manager_server-side_user_data_1',
-          mappedKey: 'user_data',
+          mappedKey: 'user_data_by_rule',
           propertiesObjectToPopulate: 'user_properties',
           version: 'control',
         },
@@ -1814,7 +1822,7 @@ scenarios:
           },
           user_properties: {
             email_address: mockClientEvent.user_data.email_address,
-            user_data:
+            user_data_by_rule:
               mockClientEvent[
                 'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
               ][0],
@@ -2034,6 +2042,10 @@ scenarios:
           key: 'iglu:com.snowplowanalytics.snowplow/client_session/jsonschema/1-0-2',
           version: 'control',
         },
+        {
+          key: 'x-sp-contexts_com_snowplowanalytics_snowplow_mobile_context_1',
+          version: 'control',
+        },
       ],
       includeCommonEventProperties: true,
       includeCommonUserProperties: true,
@@ -2124,7 +2136,7 @@ scenarios:
     assertThat(body).isEqualTo(expectedBody);
 
     assertApi('logToConsole').wasNotCalled();
-- name: Test context rules - exclude priority
+- name: Test context rules - versioning cases 1
   code: |
     const mockClientEvent = mockEventObjectSelfDesc;
     const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
@@ -2136,22 +2148,28 @@ scenarios:
       includeEntities: 'all',
       entityMappingRules: [
         {
+          key: 'x-sp-contexts_com_snowplowanalytics_snowplow_client_session_1',
+          mappedKey: 'client_session_context',
+          propertiesObjectToPopulate: 'event_properties',
+          version: 'control', // control include
+        },
+        {
           key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
           mappedKey: 'youtube',
           propertiesObjectToPopulate: 'event_properties',
-          version: 'control',
+          version: 'control', // control include
         },
         {
           key: 'contexts_com_snowplowanalytics_snowplow_media_player_1',
           mappedKey: 'media_player',
           propertiesObjectToPopulate: 'event_properties',
-          version: 'control',
+          version: 'free', // free include
         },
         {
-          key: 'contexts_com_google_tag-manager_server-side_user_data_1',
+          key: 'contexts_com_google_tag-manager_server-side_user_data',
           mappedKey: 'user_data',
           propertiesObjectToPopulate: 'user_properties',
-          version: 'control',
+          version: 'free', // free include
         },
       ],
       entityExclusionRules: [
@@ -2160,12 +2178,25 @@ scenarios:
           version: 'control',
         },
         {
-          key: 'iglu:com.snowplowanalytics.snowplow/client_session/jsonschema/1-0-2',
+          key: 'x-sp-contexts_com_snowplowanalytics_snowplow_mobile_context_1',
           version: 'control',
+        },
+        // below we exclude entities also included
+        {
+          key: 'iglu:com.snowplowanalytics.snowplow/client_session/jsonschema/1-0-2',
+          version: 'control', // control exclude
+        },
+        {
+          key: 'contexts_com_youtube_youtube_1',
+          version: 'free', // free exclude
         },
         {
           key: 'contexts_com_snowplowanalytics_snowplow_media_player_1',
-          version: 'control',
+          version: 'control', // control exclude
+        },
+        {
+          key: 'contexts_com_google_tag-manager_server-side_user_data',
+          version: 'free', // free exclude
         },
       ],
       includeCommonEventProperties: true,
@@ -2189,14 +2220,9 @@ scenarios:
             page_encoding: mockClientEvent.page_encoding,
             screen_resolution: mockClientEvent.screen_resolution,
             viewport_size: mockClientEvent.viewport_size,
-            youtube: mockClientEvent['x-sp-contexts_com_youtube_youtube_1'][0],
           },
           user_properties: {
             email_address: mockClientEvent.user_data.email_address,
-            user_data:
-              mockClientEvent[
-                'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
-              ][0],
           },
           language: mockClientEvent.language,
           platform: mockClientEvent['x-sp-platform'],
@@ -2253,14 +2279,9 @@ scenarios:
     assertThat(body).isEqualTo(expectedBody);
 
     assertApi('logToConsole').wasNotCalled();
-- name: Test context rules - many versions
+- name: Test context rules - versioning cases 2
   code: |
     const mockClientEvent = mockEventObjectSelfDesc;
-    // we want to test when a context is included version-less but excluded with version
-    // for an event that carries more than one version of same context
-    // so we add an imaginary context just for testing purposes
-    mockClientEvent['x-sp-contexts_com_youtube_youtube_5'] = [{ autoplay: true }];
-
     const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
     const mockData = {
       apiKey: '12345',
@@ -2270,36 +2291,55 @@ scenarios:
       includeEntities: 'all',
       entityMappingRules: [
         {
-          key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
+          key: 'x-sp-contexts_com_snowplowanalytics_snowplow_client_session_2',
+          mappedKey: 'client_session_context',
+          propertiesObjectToPopulate: 'event_properties',
+          version: 'control', // control include
+        },
+        {
+          key: 'iglu:com.youtube/youtube/jsonschema/2-0-0',
           mappedKey: 'youtube',
+          propertiesObjectToPopulate: 'event_properties',
+          version: 'control', // control include
+        },
+        {
+          key: 'contexts_com_snowplowanalytics_snowplow_media_player_2',
+          mappedKey: 'media_player',
           propertiesObjectToPopulate: 'event_properties',
           version: 'free', // free include
         },
         {
-          key: 'contexts_com_snowplowanalytics_snowplow_media_player', // missing version num ok for free
-          mappedKey: 'media_player',
-          propertiesObjectToPopulate: 'event_properties',
-          version: 'free',
-        },
-        {
-          key: 'contexts_com_google_tag-manager_server-side_user_data_1',
+          key: 'contexts_com_google_tag-manager_server-side_user_data_2',
           mappedKey: 'user_data',
           propertiesObjectToPopulate: 'user_properties',
-          version: 'control',
+          version: 'free', // free include
         },
       ],
       entityExclusionRules: [
         {
-          key: 'contexts_com_snowplowanalytics_snowplow_web_page_5',
-          version: 'free',
-        },
-        {
-          key: 'iglu:com.snowplowanalytics.snowplow/client_session/jsonschema/1-0-2',
+          key: 'contexts_com_snowplowanalytics_snowplow_web_page_1',
           version: 'control',
         },
         {
-          key: 'iglu:com.youtube/youtube/jsonschema/1-0-0',
+          key: 'x-sp-contexts_com_snowplowanalytics_snowplow_mobile_context_1',
+          version: 'control',
+        },
+        // below we exclude entities also included
+        {
+          key: 'iglu:com.snowplowanalytics.snowplow/client_session/jsonschema/2-0-2',
           version: 'control', // control exclude
+        },
+        {
+          key: 'contexts_com_youtube_youtube_2',
+          version: 'free', // free exclude
+        },
+        {
+          key: 'contexts_com_snowplowanalytics_snowplow_media_player_2',
+          version: 'control', // control exclude
+        },
+        {
+          key: 'contexts_com_google_tag-manager_server-side_user_data_2',
+          version: 'free', // free exclude
         },
       ],
       includeCommonEventProperties: true,
@@ -2323,18 +2363,17 @@ scenarios:
             page_encoding: mockClientEvent.page_encoding,
             screen_resolution: mockClientEvent.screen_resolution,
             viewport_size: mockClientEvent.viewport_size,
-            youtube: mockClientEvent['x-sp-contexts_com_youtube_youtube_5'], // expect only version 5
             media_player:
               mockClientEvent[
                 'x-sp-contexts_com_snowplowanalytics_snowplow_media_player_1'
               ],
+            contexts_com_snowplowanalytics_snowplow_client_session_1:
+              mockClientEvent[
+                'x-sp-contexts_com_snowplowanalytics_snowplow_client_session_1'
+              ],
           },
           user_properties: {
             email_address: mockClientEvent.user_data.email_address,
-            user_data:
-              mockClientEvent[
-                'x-sp-contexts_com_google_tag-manager_server-side_user_data_1'
-              ],
           },
           language: mockClientEvent.language,
           platform: mockClientEvent['x-sp-platform'],
