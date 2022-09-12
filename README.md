@@ -4,7 +4,7 @@
 [![License][license-image]][license]
 [![Release][release-image]][releases]
 
-Snowplow is a scalable open-source platform for rich, high quality, low-latency data collection. It is designed to collect high quality, complete behavioral data for enterprise business.
+[Snowplow][snowplow] is a scalable open-source platform for rich, high quality, low-latency data collection. It is designed to collect high quality, complete behavioral data for enterprise business.
 
 **To find out more, please check out the [Snowplow website][website] and our [documentation][docs].**
 
@@ -50,10 +50,10 @@ To manually install this Client:
 
 Feedback and contributions are welcome - if you have identified a bug, please log an issue on this repo. For all other feedback, discussion or questions please open a thread on our [discourse forum][discourse].
 
-| Contributing                                 |
-|----------------------------------------------|
-| [![i3][contributing-image]](CONTRIBUTING.md) |
-| [Contributing](CONTRIBUTING.md)              |
+| Contributing                              |
+|-------------------------------------------|
+| [![i3][contributing-image]][contributing] |
+| [Contributing][contributing]              |
 
 ## Copyright and license
 
@@ -68,7 +68,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-[tracker-classification]: https://docs.snowplowanalytics.com/docs/collecting-data/collecting-from-own-applications/tracker-maintenance-classification/
+[tracker-classification]: https://docs.snowplow.io/docs/collecting-data/collecting-from-own-applications/tracker-maintenance-classification/
 [early-release]: https://img.shields.io/static/v1?style=flat&label=Snowplow&message=Early%20Release&color=014477&labelColor=9ba0aa&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAeFBMVEVMaXGXANeYANeXANZbAJmXANeUANSQAM+XANeMAMpaAJhZAJeZANiXANaXANaOAM2WANVnAKWXANZ9ALtmAKVaAJmXANZaAJlXAJZdAJxaAJlZAJdbAJlbAJmQAM+UANKZANhhAJ+EAL+BAL9oAKZnAKVjAKF1ALNBd8J1AAAAKHRSTlMAa1hWXyteBTQJIEwRgUh2JjJon21wcBgNfmc+JlOBQjwezWF2l5dXzkW3/wAAAHpJREFUeNokhQOCA1EAxTL85hi7dXv/E5YPCYBq5DeN4pcqV1XbtW/xTVMIMAZE0cBHEaZhBmIQwCFofeprPUHqjmD/+7peztd62dWQRkvrQayXkn01f/gWp2CrxfjY7rcZ5V7DEMDQgmEozFpZqLUYDsNwOqbnMLwPAJEwCopZxKttAAAAAElFTkSuQmCC
 
 [license]: https://www.apache.org/licenses/LICENSE-2.0
@@ -77,17 +77,18 @@ limitations under the License.
 [releases]: https://github.com/snowplow/snowplow-gtm-server-side-amplitude-tag/releases
 [release-image]: https://img.shields.io/github/v/release/snowplow/snowplow-gtm-server-side-amplitude-tag
 
-[website]: https://snowplowanalytics.com
-[docs]: https://docs.snowplowanalytics.com
+[website]: https://snowplow.io
+[docs]: https://docs.snowplow.io
 [snowplow]: https://github.com/snowplow/snowplow
-[discourse]: https://discourse.snowplowanalytics.com
+[discourse]: https://discourse.snowplow.io
 
-[techdocs]: https://docs.snowplowanalytics.com/docs/forwarding-events-to-destinations/forwarding-events/google-tag-manager-server-side/amplitude-tag-for-gtm-ss/amplitude-tag-configuration/
+[techdocs]: https://docs.snowplow.io/docs/forwarding-events-to-destinations/forwarding-events/google-tag-manager-server-side/amplitude-tag-for-gtm-ss/amplitude-tag-configuration/
 [techdocs-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/techdocs.png
-[setup]: https://docs.snowplowanalytics.com/docs/forwarding-events-to-destinations/forwarding-events/google-tag-manager-server-side/amplitude-tag-for-gtm-ss/
+[setup]: https://docs.snowplow.io/docs/forwarding-events-to-destinations/forwarding-events/google-tag-manager-server-side/amplitude-tag-for-gtm-ss/
 [setup-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/setup.png
 
 [contributing-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/contributing.png
+[contributing]: CONTRIBUTING.md
 
 [snowplow-client]: https://github.com/snowplow/snowplow-gtm-server-side-client/
 [javascript-tracker]: https://github.com/snowplow/snowplow-javascript-tracker
