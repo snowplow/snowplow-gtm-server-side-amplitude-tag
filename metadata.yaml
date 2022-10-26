@@ -2,11 +2,15 @@ homepage: "https://www.snowplow.io"
 documentation: "https://docs.snowplow.io/docs/forwarding-events-to-destinations/forwarding-events/google-tag-manager-server-side/amplitude-tag-for-gtm-ss"
 versions:
   # Latest version
+  - sha: 2f416ab720886a6e066aae7c3d0b2693071d3bac
+    changeNotes: |2
+      Add GitHub Actions (#24)
+      Allow overriding device_id and user_id in Amplitude payload (#23)
+  # Older versions
   - sha: 9c479e4d01278de01e376a177cface85ae77cf17
     changeNotes: |2
       Switch to snowplow.io domain (#21)
       Fix edge case in context rules (#20)
-  # Older versions
   - sha: 8c31f847ee98c770415503c30b2938a5739580c0
     changeNotes: |2
       Add version control naming as an option (#7)

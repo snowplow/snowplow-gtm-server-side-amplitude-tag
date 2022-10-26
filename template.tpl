@@ -449,6 +449,66 @@ ___TEMPLATE_PARAMETERS___
             "help": "Allows you to set the time of the Amplitude event from the current timestamp or from an event property (milliseconds since unix epoch). If time is not sent with the event, then it is automatically set by Amplitude to the request upload time."
           }
         ]
+      },
+      {
+        "type": "GROUP",
+        "name": "deviceIdGroup",
+        "displayName": "Device Identifier",
+        "groupStyle": "ZIPPY_CLOSED",
+        "subParams": [
+          {
+            "type": "CHECKBOX",
+            "name": "defaultDeviceId",
+            "checkboxText": "Inherit Amplitude device_id from common event client_id",
+            "simpleValueType": true,
+            "help": "Untick this box to override the value for \u003cstrong\u003edevice_id\u003c/strong\u003e in Amplitude event payload.",
+            "defaultValue": true
+          },
+          {
+            "type": "TEXT",
+            "name": "deviceId",
+            "displayName": "Device ID Override",
+            "simpleValueType": true,
+            "help": "Specify the value of the \u003cstrong\u003edevice_id\u003c/strong\u003e property of the Amplitude payload.",
+            "enablingConditions": [
+              {
+                "paramName": "defaultDeviceId",
+                "paramValue": false,
+                "type": "EQUALS"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "GROUP",
+        "name": "userIdGroup",
+        "displayName": "User Identifier",
+        "groupStyle": "ZIPPY_CLOSED",
+        "subParams": [
+          {
+            "type": "CHECKBOX",
+            "name": "defaultUserId",
+            "checkboxText": "Inherit Amplitude user_id from common event user_id",
+            "simpleValueType": true,
+            "defaultValue": true,
+            "help": "Untick this box to override the value for \u003cstrong\u003euser_id\u003c/strong\u003e in Amplitude event payload."
+          },
+          {
+            "type": "TEXT",
+            "name": "userId",
+            "displayName": "User ID Override",
+            "simpleValueType": true,
+            "help": "Specify the value of the \u003cstrong\u003euser_id\u003c/strong\u003e property of the Amplitude payload.",
+            "enablingConditions": [
+              {
+                "paramName": "defaultUserId",
+                "paramValue": false,
+                "type": "EQUALS"
+              }
+            ]
+          }
+        ]
       }
     ]
   },
@@ -1171,7 +1231,8 @@ let platform = eventData['x-sp-platform'] || data.fallbackPlatform;
 
 let amplitudeEvent = {
   event_type: eventData.event_name,
-  device_id: eventData.client_id,
+  device_id: data.defaultDeviceId ? eventData.client_id : data.deviceId,
+  user_id: data.defaultUserId ? (eventData.user_id || undefined) : data.userId,
   ip: data.forwardIp ? eventData.ip_override : undefined,
   time: getAmplitudeTime(data),
   session_id: getAmplitudeSession(eventData),
@@ -1211,10 +1272,6 @@ if (
   amplitudeEvent.idfa = context.appleIdfa;
   amplitudeEvent.idfv = context.appleIdfv;
   amplitudeEvent.adid = context.androidIdfa;
-}
-
-if (eventData.user_id) {
-  amplitudeEvent.user_id = eventData.user_id;
 }
 
 const amplitudeEvents = [cleanObject(amplitudeEvent)];
@@ -1444,6 +1501,8 @@ scenarios:
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'no',
     };
 
@@ -1523,6 +1582,7 @@ scenarios:
     );
 
     const body = json.parse(argBody);
+    //logToConsole(body);
     assertThat(body).isEqualTo(expectedBody);
 
     assertApi('logToConsole').wasNotCalled();
@@ -1542,6 +1602,10 @@ scenarios:
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
+      defaultDeviceId: false, // test also device_id override
+      deviceId: 'testDeviceIdValue',
+      defaultUserId: false,   // test also user_id override
+      userId: 'testUserIdValue',
       logType: 'debug',
     };
 
@@ -1550,7 +1614,7 @@ scenarios:
       events: [
         {
           event_type: mockClientEvent.event_name,
-          device_id: mockClientEvent.client_id,
+          device_id: 'testDeviceIdValue',
           session_id: firstEvTimeUnixMillis,
           event_properties: {
             page_location: mockClientEvent.page_location,
@@ -1586,7 +1650,7 @@ scenarios:
           language: mockClientEvent.language,
           platform: mockClientEvent['x-sp-platform'],
           insert_id: mockClientEvent['x-sp-event_id'],
-          user_id: mockClientEvent.user_id,
+          user_id: 'testUserIdValue',
         },
       ],
     };
@@ -1654,6 +1718,8 @@ scenarios:
       mktToUserUtm: false,
       forwardIp: true,
       fallbackPlatform: 'web',
+      defaultDeviceId: true,
+      defaultUserId: true,
       amplitudeTime: 'no',
       // test also logType default is debug
       // logType undefined
@@ -1791,6 +1857,8 @@ scenarios:
       forwardIp: false,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'no',
     };
 
@@ -1918,6 +1986,8 @@ scenarios:
       forwardIp: false,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'always',
     };
 
@@ -2053,6 +2123,8 @@ scenarios:
       forwardIp: false,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'no',
     };
 
@@ -2205,6 +2277,8 @@ scenarios:
       forwardIp: false,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'no',
     };
 
@@ -2348,6 +2422,8 @@ scenarios:
       forwardIp: false,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'no',
     };
 
@@ -2462,6 +2538,8 @@ scenarios:
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'always',
     };
 
@@ -2550,6 +2628,8 @@ scenarios:
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'debug',
     };
 
@@ -2559,12 +2639,12 @@ scenarios:
         {
           event_type: mockClientEvent.event_name,
           device_id: mockClientEvent.client_id,
+          user_id: mockClientEvent.user_id,
           event_properties: {},
           user_properties: {},
           platform: mockData.fallbackPlatform,
           language: mockClientEvent.language,
           insert_id: mockClientEvent['x-sp-event_id'],
-          user_id: mockClientEvent.user_id,
         },
       ],
     };
@@ -2666,6 +2746,8 @@ scenarios:
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'debug',
     };
 
@@ -2702,6 +2784,8 @@ scenarios:
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'current',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'no',
     };
     const mockTimestamp = 1658558068123;
@@ -2763,6 +2847,8 @@ scenarios:
       fallbackPlatform: 'web',
       amplitudeTime: 'eventProperty',
       timeProp: 'propDoesNotExist',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'no',
     };
 
@@ -2825,6 +2911,8 @@ scenarios:
       fallbackPlatform: 'web',
       amplitudeTime: 'eventProperty',
       timeProp: 'x-sp-dvce_created_tstamp',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'no',
     };
     // raw Snowplow events have unix timestamps
@@ -2888,6 +2976,8 @@ scenarios:
       fallbackPlatform: 'srv',
       amplitudeTime: 'eventProperty',
       timeProp: 'x-sp-collector_tstamp',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'no',
     };
     // raw Snowplow events have unix timestamps
@@ -2968,6 +3058,8 @@ scenarios:
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'debug',
     };
 
@@ -3053,6 +3145,8 @@ scenarios:
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
+      defaultDeviceId: true,
+      defaultUserId: true,
       logType: 'debug',
     };
 
