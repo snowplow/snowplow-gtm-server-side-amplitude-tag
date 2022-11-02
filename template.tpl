@@ -316,6 +316,93 @@ ___TEMPLATE_PARAMETERS___
   },
   {
     "type": "GROUP",
+    "name": "additionalProperties",
+    "displayName": "Additional Properties",
+    "groupStyle": "ZIPPY_CLOSED",
+    "subParams": [
+      {
+        "type": "GROUP",
+        "name": "additionalEventPropsGroup",
+        "displayName": "Event Properties",
+        "groupStyle": "ZIPPY_OPEN",
+        "subParams": [
+          {
+            "type": "SIMPLE_TABLE",
+            "name": "additionalEventProperties",
+            "displayName": "Additional Event Properties",
+            "simpleTableColumns": [
+              {
+                "defaultValue": "",
+                "displayName": "Amplitude Property Name",
+                "name": "key",
+                "type": "TEXT",
+                "isUnique": true,
+                "valueValidators": [
+                  {
+                    "type": "NON_EMPTY"
+                  }
+                ]
+              },
+              {
+                "defaultValue": "",
+                "displayName": "Value",
+                "name": "value",
+                "type": "TEXT",
+                "isUnique": false,
+                "valueValidators": [
+                  {
+                    "type": "NON_EMPTY"
+                  }
+                ]
+              }
+            ],
+            "help": "Using this table allows you to set additional \u003cstrong\u003eevent_properties\u003c/strong\u003e to a custom value (e.g. through a variable). Simply specify the Property Name for Amplitude and then the Value you would like to set it to."
+          }
+        ]
+      },
+      {
+        "type": "GROUP",
+        "name": "additionalUserPropsGroup",
+        "displayName": "User Properties",
+        "groupStyle": "ZIPPY_OPEN",
+        "subParams": [
+          {
+            "type": "SIMPLE_TABLE",
+            "name": "additionalUserProperties",
+            "displayName": "Additional User Properties",
+            "simpleTableColumns": [
+              {
+                "defaultValue": "",
+                "displayName": "Amplitude Property Name",
+                "name": "key",
+                "type": "TEXT",
+                "isUnique": true,
+                "valueValidators": [
+                  {
+                    "type": "NON_EMPTY"
+                  }
+                ]
+              },
+              {
+                "defaultValue": "",
+                "displayName": "Value",
+                "name": "value",
+                "type": "TEXT",
+                "valueValidators": [
+                  {
+                    "type": "NON_EMPTY"
+                  }
+                ]
+              }
+            ],
+            "help": "Using this table allows you to set additional \u003cstrong\u003euser_properties\u003c/strong\u003e to a custom value (e.g. through a variable). Simply specify the Property Name for Amplitude and then the Value you would like to set it to."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "GROUP",
     "name": "advancedProperties",
     "displayName": "Advanced Event Settings",
     "groupStyle": "ZIPPY_CLOSED",
@@ -559,6 +646,7 @@ const JSON = require('JSON');
 const log = require('logToConsole');
 const makeNumber = require('makeNumber');
 const makeString = require('makeString');
+const makeTableMap = require('makeTableMap');
 const Math = require('Math');
 const sendHttpRequest = require('sendHttpRequest');
 const sha256Sync = require('sha256Sync');
@@ -1219,6 +1307,22 @@ if (data.eventMappingRules && data.eventMappingRules.length > 0) {
 }
 
 parseCustomEventAndEntities(eventData, data, eventProperties, userProperties);
+
+// additional event properties
+if (data.additionalEventProperties && data.additionalEventProperties.length > 0) {
+  eventProperties = merge([
+    eventProperties,
+    makeTableMap(data.additionalEventProperties, 'key', 'value'),
+  ]);
+}
+
+// additional user properties
+if (data.additionalUserProperties && data.additionalUserProperties.length > 0) {
+  userProperties = merge([
+    userProperties,
+    makeTableMap(data.additionalUserProperties, 'key', 'value'),
+  ]);
+}
 
 let insertId =
   eventData['x-sp-event_id'] ||
@@ -3124,7 +3228,7 @@ scenarios:
 
     const body = json.parse(argBody);
     assertThat(body).isEqualTo(expectedBody);
-- name: Test mapping precedence
+- name: Test mapping precedence and additional props
   code: |
     const mockClientEvent = mockEventObjectPageView;
     const mockData = {
@@ -3142,6 +3246,14 @@ scenarios:
           mappedKey: 'utm_term',
         },
       ],
+      additionalEventProperties: [
+        { key: 'test_event_prop_a', value: 'foo_a' },
+        { key: 'test_event_prop_b', value: 'foo_b' },
+      ],
+      additionalUserProperties: [
+        { key: 'test_user_prop_a', value: 'bar_a' },
+        { key: 'test_user_prop_b', value: 'bar_b' },
+      ],
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
@@ -3156,13 +3268,18 @@ scenarios:
         {
           event_type: mockClientEvent.event_name,
           device_id: mockClientEvent.client_id,
-          event_properties: {},
+          event_properties: {
+            test_event_prop_a: 'foo_a',
+            test_event_prop_b: 'foo_b',
+          },
           user_properties: {
             utm_source: mockClientEvent['x-sp-mkt_source'],
             utm_medium: mockClientEvent['x-sp-mkt_medium'],
             utm_campaign: mockClientEvent['x-sp-mkt_campaign'],
             utm_term: mockClientEvent.language,
             utm_content: mockClientEvent['x-sp-mkt_content'],
+            test_user_prop_a: 'bar_a',
+            test_user_prop_b: 'bar_b',
           },
           platform: mockData.fallbackPlatform,
           language: mockClientEvent.language,
