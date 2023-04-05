@@ -2,9 +2,15 @@ homepage: "https://www.snowplow.io"
 documentation: "https://docs.snowplow.io/docs/forwarding-events-to-destinations/forwarding-events/google-tag-manager-server-side/amplitude-tag-for-gtm-ss"
 versions:
   # Latest version
+  - sha: b3be0dbb4b988f6eb4d773d01f2fd0b2e978f056
+    changeNotes: |2
+      Update copyright to 2023 (#30)
+      Fix link to Contributor license agreement (#31)
+      Fix value check when populating properties (#29)
+      Add option to populate Amplitude groups (#28)
+  # Older versions
   - sha: 6fb6d64efe5d4e77322db4235dbe1613d83e5541
     changeNotes: Allow setting properties to custom value (#26)
-  # Older versions
   - sha: 2f416ab720886a6e066aae7c3d0b2693071d3bac
     changeNotes: |2
       Add GitHub Actions (#24)
