@@ -311,6 +311,41 @@ ___TEMPLATE_PARAMETERS___
             "help": "Specify the Property Key from the GTM Event, and the key you could like to map it to or leave the mapped key blank to keep the same name.  You can use Key Path notation here (e.g. `x-sp-tp2.p` for a Snowplow events platform or `x-sp-contexts.com_snowplowanalytics_snowplow_web_page_1.0.id` for a Snowplow events page view id (in array index 0). These keys will populate the Amplitude `userProperties` object."
           }
         ]
+      },
+      {
+        "type": "GROUP",
+        "name": "commonGroupsPropertyRules",
+        "displayName": "Groups Property Rules",
+        "groupStyle": "ZIPPY_CLOSED",
+        "subParams": [
+          {
+            "type": "SIMPLE_TABLE",
+            "name": "groupsMappingRules",
+            "displayName": "Groups Property Mapping Rules",
+            "simpleTableColumns": [
+              {
+                "defaultValue": "",
+                "displayName": "Event Property Key",
+                "name": "key",
+                "type": "TEXT",
+                "isUnique": true,
+                "valueValidators": [
+                  {
+                    "type": "NON_EMPTY"
+                  }
+                ]
+              },
+              {
+                "defaultValue": "",
+                "displayName": "Amplitude Mapped Key (optional)",
+                "name": "mappedKey",
+                "type": "TEXT",
+                "isUnique": false
+              }
+            ],
+            "help": "Specify the Property Key from the GTM Event, and then key you would like to map it to or leave the mapped key blank to keep the same name. You can use Key Path notation here (e.g. `x-sp-tp2.p` for a Snowplow events platform or `x-sp-contexts.com_snowplowanalytics_snowplow_web_page_1.0.id` for a Snowplow events page view id (in array index 0). These keys will populate the Amplitude `groups` object, which is relevant \u003cstrong\u003eonly if\u003c/strong\u003e you have set up account-level reporting in Amplitude."
+          }
+        ]
       }
     ]
   },
@@ -1222,6 +1257,22 @@ const initUserData = (evData, tagConfig) => {
 };
 
 /*
+ * Returns the groups object (for Amplitude Accounts Add-on)
+ * based on the Groups Property Rules configured.
+ *
+ * @param evData {Object} - the client event object
+ * @param tagConfig {Object} - the tag configuration
+ * @returns - Object
+ */
+const makeGroupsProperties = (evData, tagConfig) => {
+  const groupsRules = tagConfig.groupsMappingRules;
+  if (groupsRules && groupsRules.length > 0) {
+    return getEventDataByKeys(groupsRules);
+  }
+  return undefined;
+};
+
+/*
  * Returns the time property for Amplitude event
  * depending on time settings configured.
  *
@@ -1342,6 +1393,7 @@ let amplitudeEvent = {
   session_id: getAmplitudeSession(eventData),
   event_properties: eventProperties,
   user_properties: userProperties,
+  groups: makeGroupsProperties(eventData, data),
   platform: platform,
   country: eventData['x-sp-geo_country'],
   region: eventData['x-sp-geo_region'],
@@ -2610,7 +2662,7 @@ scenarios:
     assertThat(body).isEqualTo(expectedBody);
 
     assertApi('logToConsole').wasNotCalled();
-- name: Test additional event mapping options
+- name: Test additional event mapping options and groups
   code: |
     const mockClientEvent = mockEventObjectSelfDesc;
     const firstEvTimeUnixMillis = 1658567284451; // '2022-07-23T09:08:04.451Z'
@@ -2639,6 +2691,20 @@ scenarios:
           mappedKey: 'email',
         },
       ],
+      groupsMappingRules: [
+        {
+          key: 'client_id',
+          mappedKey: '',
+        },
+        {
+          key: 'x-sp-contexts_com_snowplowanalytics_snowplow_client_session_1.0.sessionId',
+          mappedKey: 'group_id',
+        },
+        {
+          key: 'x-sp-does_not_exist',
+          mappedKey: 'ignore',
+        },
+      ],
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
@@ -2660,6 +2726,10 @@ scenarios:
           },
           user_properties: {
             email: mockClientEvent.user_data.email_address,
+          },
+          groups: {
+            client_id: 'fd0e5288-e89b-45df-aad5-6d0c6eda6198',
+            group_id: '1ab28b79-bfdd-4855-9bf1-5199ce15beac',
           },
           insert_id: mockClientEvent['x-sp-event_id'],
           user_id: mockClientEvent.user_id,
