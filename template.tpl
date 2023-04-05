@@ -1002,7 +1002,7 @@ const getEventDataByKeys = (configProps) => {
   const props = {};
   configProps.forEach((p) => {
     let eventProperty = getEventData(p.key);
-    if (eventProperty) {
+    if (eventProperty !== undefined) {
       props[p.mappedKey || p.key] = eventProperty;
     }
   });
@@ -2679,6 +2679,10 @@ scenarios:
           mappedKey: 'media_event_type',
         },
         {
+          key: 'x-sp-contexts_com_youtube_youtube_1.0.autoPlay',
+          mappedKey: 'autoPlay',
+        },
+        {
           key: 'x-sp-tp2.tv',
           mappedKey: 'tracker',
         },
@@ -2723,6 +2727,7 @@ scenarios:
           event_properties: {
             media_event_type: 'play',
             tracker: mockClientEvent['x-sp-tp2'].tv,
+            autoPlay: false,
           },
           user_properties: {
             email: mockClientEvent.user_data.email_address,
