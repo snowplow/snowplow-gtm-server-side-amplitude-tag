@@ -433,6 +433,40 @@ ___TEMPLATE_PARAMETERS___
             "help": "Using this table allows you to set additional \u003cstrong\u003euser_properties\u003c/strong\u003e to a custom value (e.g. through a variable). Simply specify the Property Name for Amplitude and then the Value you would like to set it to."
           }
         ]
+      },
+      {
+        "type": "GROUP",
+        "name": "additionalGroupsPropsGroup",
+        "displayName": "Groups Properties",
+        "groupStyle": "ZIPPY_CLOSED",
+        "subParams": [
+          {
+            "type": "SIMPLE_TABLE",
+            "name": "additionalGroupsProperties",
+            "displayName": "Additional Groups Properties",
+            "simpleTableColumns": [
+              {
+                "defaultValue": "",
+                "displayName": "Amplitude Property Name",
+                "name": "key",
+                "type": "TEXT",
+                "isUnique": true,
+                "valueValidators": [
+                  {
+                    "type": "NON_EMPTY"
+                  }
+                ]
+              },
+              {
+                "defaultValue": "",
+                "displayName": "Value",
+                "name": "value",
+                "type": "TEXT"
+              }
+            ],
+            "help": "Using this table allows you to set additional \u003cstrong\u003egroups\u003c/strong\u003e properties to a custom value (e.g. through a variable). Simply specify the Property Name for Amplitude and then the Value you would like to set it to."
+          }
+        ]
       }
     ]
   },
@@ -677,6 +711,7 @@ const getEventData = require('getEventData');
 const getRequestHeader = require('getRequestHeader');
 const getRequestPath = require('getRequestPath');
 const getTimestampMillis = require('getTimestampMillis');
+const getType = require('getType');
 const JSON = require('JSON');
 const log = require('logToConsole');
 const makeNumber = require('makeNumber');
@@ -998,6 +1033,29 @@ const merge = (args) => {
   return target;
 };
 
+/*
+ * Helper function to make payload properties over the different types of
+ * tag configuration rules (e.g. custom, additional).
+ *
+ * @param rules - the rules from the tag configuration
+ * @param func - the function to make properties based on those rules
+ * @param zeroVal - alternative value to return if no rules
+ * @returns - func(rules) or zeroVal
+ */
+const makeProps = (rules, func, zeroVal) => {
+  if (getType(rules) === 'array' && rules.length > 0) {
+    return func(rules);
+  }
+  return zeroVal;
+};
+
+/*
+ * Helper to close over makeTableMap.
+ */
+const tableMapper = (keyName, valName) => {
+  return (arr) => makeTableMap(arr, keyName, valName);
+};
+
 const getEventDataByKeys = (configProps) => {
   const props = {};
   configProps.forEach((p) => {
@@ -1265,11 +1323,22 @@ const initUserData = (evData, tagConfig) => {
  * @returns - Object
  */
 const makeGroupsProperties = (evData, tagConfig) => {
-  const groupsRules = tagConfig.groupsMappingRules;
-  if (groupsRules && groupsRules.length > 0) {
-    return getEventDataByKeys(groupsRules);
+  const customRules = tagConfig.groupsMappingRules;
+  const additionalRules = tagConfig.additionalGroupsProperties;
+  const groupsData = {
+    custom: makeProps(customRules, getEventDataByKeys, undefined),
+    additional: makeProps(
+      additionalRules,
+      tableMapper('key', 'value'),
+      undefined
+    ),
+  };
+
+  if (groupsData.custom && groupsData.additional) {
+    return merge([groupsData.custom, groupsData.additional]);
   }
-  return undefined;
+
+  return groupsData.custom || groupsData.additional;
 };
 
 /*
@@ -3329,6 +3398,10 @@ scenarios:
         { key: 'test_user_prop_a', value: 'bar_a' },
         { key: 'test_user_prop_b', value: 'bar_b' },
       ],
+      additionalGroupsProperties: [
+        { key: 'a', value: 1 },
+        { key: 'b', value: 2 },
+      ],
       forwardIp: true,
       fallbackPlatform: 'web',
       amplitudeTime: 'no',
@@ -3355,6 +3428,10 @@ scenarios:
             utm_content: mockClientEvent['x-sp-mkt_content'],
             test_user_prop_a: 'bar_a',
             test_user_prop_b: 'bar_b',
+          },
+          groups: {
+            a: 1,
+            b: 2,
           },
           platform: mockData.fallbackPlatform,
           language: mockClientEvent.language,

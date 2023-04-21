@@ -26,4 +26,4 @@ jobs:
 
     - name: Lint metadata file
       run: |
-        yamllint -d relaxed metadata.yaml
+        yamllint -d "{extends: relaxed, rules: {line-length: {max: 120}}}" metadata.yaml
