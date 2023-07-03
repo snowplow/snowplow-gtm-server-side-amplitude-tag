@@ -746,12 +746,12 @@ const mktToUtmMap = [
 
 // Helpers
 
-/*
+/**
  * Assumes logType argument is string.
  * Determines if logging is enabled.
  *
- * @param logType {string} - the logType set ('no', 'debug', 'always')
- * @returns - whether logging is enabled (boolean)
+ * @param {string} logType - The logType set ('no', 'debug', 'always')
+ * @returns {boolean} Whether logging is enabled
  */
 const determineIsLoggingEnabled = (logType) => {
   const containerVersion = getContainerVersion();
@@ -773,12 +773,13 @@ const determineIsLoggingEnabled = (logType) => {
   return data.logType === 'always';
 };
 
-/*
+/**
  * Creates the log message and logs it to console.
  *
- * @param typeName {string} - the type of log ('Message', 'Request', 'Response')
- * @param stdInfo {Object} - the standard info for all logs (Name, Type, TraceId, EventName)
- * @param logInfo {Object} - an object including information for the specific log type
+ * @param {string} typeName - The type of log ('Message', 'Request', 'Response')
+ * @param {Object} stdInfo - The standard info for all logs (Name, Type, TraceId, EventName)
+ * @param {Object} logInfo - An object including information for the specific log type
+ * @returns {undefined}
  */
 const doLogging = (typeName, stdInfo, logInfo) => {
   const logMessage = {
@@ -811,11 +812,11 @@ const doLogging = (typeName, stdInfo, logInfo) => {
   log(JSON.stringify(logMessage));
 };
 
-/*
+/**
  * Determines whether the event is a snowplow enriched event
  * based on the request path.
  *
- * @returns - boolean
+ * @returns {boolean}
  */
 const isSpEnrichedEvent = () => {
   const requestPath = getRequestPath();
@@ -825,11 +826,12 @@ const isSpEnrichedEvent = () => {
   return false;
 };
 
-/*
+/**
  * Determines if a property of the client event object
  * is a Snowplow enriched timestamp.
  *
- * @returns - boolean
+ * @param {string} propName - The property name
+ * @returns {boolean}
  */
 const isSpTstampProp = (propName) => {
   if (spAtomicTstamps.indexOf(propName) >= 0) {
@@ -838,15 +840,15 @@ const isSpTstampProp = (propName) => {
   return false;
 };
 
-/*
+/**
  * Determines whether its argument is a string formatted
  * per ISO 8601 time representation.
  * No support for timezones except Z.
  * Supported forms: '2022-07-22T23:56:32Z' and '2022-07-22T23:56:32.123Z".
  * Returns an array of the string time parts.
  *
- * @param x {any}
- * @returns Array or undefined
+ * @param {*} x
+ * @returns {(integer[]|undefined)}
  */
 function isISOString(x) {
   if (typeof x !== 'string') {
@@ -900,7 +902,7 @@ function isISOString(x) {
   return [year, month, day, hour, min, sec, millis];
 }
 
-/*
+/**
  * Parses an ISO-time string to a time object.
  * Note the differences makeInteger Vs makeNumber:
  *
@@ -922,8 +924,8 @@ function isISOString(x) {
  * logToConsole(makeNumber('foo') === makeNumber('foo')) -> false
  * logToConsole(makeNumber('foo') == makeNumber('foo')) -> false
  *
- * @param isoString {string}
- * @returns - an object with the time parts as numbers
+ * @param {string} isoString
+ * @returns {Object}
  */
 function parseISOTime(isoString) {
   const iso = isISOString(isoString);
@@ -966,8 +968,11 @@ function parseISOTime(isoString) {
   };
 }
 
-/*
+/**
  * https://howardhinnant.github.io/date_algorithms.html#days_from_civil
+ *
+ * @param {string} isoTime - The time in ISO format
+ * @returns {integer} The Unix time (milliseconds)
  */
 function isoToUnixMillis(isoTime) {
   const iso = parseISOTime(isoTime);
@@ -1004,6 +1009,12 @@ function isoToUnixMillis(isoTime) {
   return unixMillis;
 }
 
+/**
+ * Removes equal to null properties from given object.
+ *
+ * @param {Object} obj - The object to clean
+ * @returns {Object}
+ */
 const cleanObject = (obj) => {
   let target = {};
 
@@ -1016,6 +1027,12 @@ const cleanObject = (obj) => {
   return target;
 };
 
+/**
+ * Merges objects.
+ *
+ * @param {Object[]} args - The array of objects to merge
+ * @returns {Object} The resulting object
+ */
 const merge = (args) => {
   let target = {};
 
@@ -1034,14 +1051,14 @@ const merge = (args) => {
   return target;
 };
 
-/*
+/**
  * Helper function to make payload properties over the different types of
  * tag configuration rules (e.g. custom, additional).
  *
- * @param rules - the rules from the tag configuration
- * @param func - the function to make properties based on those rules
- * @param zeroVal - alternative value to return if no rules
- * @returns - func(rules) or zeroVal
+ * @param {Object[]} rules - The rules from the tag configuration
+ * @param {function} func - The function to make properties based on those rules
+ * @param {*} zeroVal - Alternative value to return if no rules
+ * @returns {*}
  */
 const makeProps = (rules, func, zeroVal) => {
   if (getType(rules) === 'array' && rules.length > 0) {
@@ -1050,13 +1067,23 @@ const makeProps = (rules, func, zeroVal) => {
   return zeroVal;
 };
 
-/*
+/**
  * Helper to close over makeTableMap.
+ *
+ * @param {string} keyName
+ * @param {string} valName
+ * @returns {function}
  */
 const tableMapper = (keyName, valName) => {
   return (arr) => makeTableMap(arr, keyName, valName);
 };
 
+/**
+ * Utility function that creates an object according to Event Property Rules.
+ *
+ * @param {Object[]} configProps - The event property rules
+ * @returns {Object}
+ */
 const getEventDataByKeys = (configProps) => {
   const props = {};
   configProps.forEach((p) => {
@@ -1068,6 +1095,14 @@ const getEventDataByKeys = (configProps) => {
   return props;
 };
 
+/**
+ * Replaces all occurences of a substring.
+ *
+ * @param {string} str - The string
+ * @param {string} substring - The substring to replace
+ * @param {string} newSubstr - The new substring to replace with
+ * @returns {string}
+ */
 const replaceAll = (str, substr, newSubstr) => {
   let finished = false,
     result = str;
@@ -1081,10 +1116,22 @@ const replaceAll = (str, substr, newSubstr) => {
   return result;
 };
 
+/**
+ * Returns whether a string is upper case.
+ *
+ * @param {string} value - The string to check
+ * @returns {boolean}
+ */
 const isUpper = (value) => {
   return value === value.toUpperCase() && value !== value.toLowerCase();
 };
 
+/**
+ * Converts a string to snake case.
+ *
+ * @param {string} value - The string to convert
+ * @returns {string} The converted string
+ */
 const toSnakeCase = (value) => {
   let result = '';
   let previousChar;
@@ -1100,17 +1147,32 @@ const toSnakeCase = (value) => {
   return result;
 };
 
+/**
+ * Cleans a name from the GTM-SS Snowplow prefix ('x-sp-').
+ *
+ * @param {string} prop - The property name
+ * @returns {string} The property name with the GTM-SS Snowplow prefix removed.
+ */
 const cleanPropertyName = (prop) => prop.replace('x-sp-', '');
 
+/**
+ * Given an array and a configuration object,
+ *  returns the element from a single element array or the array itself.
+ *
+ * @param {Array} arr - The input array
+ * @param {Object} tagConfig - The tag configuration object
+ * @param {boolean} tagConfig.extractFromArray - Whether to extract a single element
+ * @returns {*} The array or its single element
+ */
 const extractFromArrayIfSingleElement = (arr, tagConfig) =>
   arr.length === 1 && tagConfig.extractFromArray ? arr[0] : arr;
 
-/*
+/**
  * Parses a Snowplow schema to the expected major version format,
  *  also prefixed so as to match the contexts' output of the Snowplow Client.
  *
- * @param schema {string} - the input schema
- * @returns - the expected output client event property
+ * @param {string} schema - The input schema
+ * @returns {string} The expected output client event property
  */
 const parseSchemaToMajorKeyValue = (schema) => {
   if (schema.indexOf('x-sp-contexts_') === 0) return schema;
@@ -1134,15 +1196,21 @@ const parseSchemaToMajorKeyValue = (schema) => {
   return schema;
 };
 
-/*
+/**
  * Returns whether a property name is a Snowplow self-describing event property.
+ *
+ * @param {string} prop - The property name
+ * @returns {boolean}
  */
 const isSpSelfDescProp = (prop) => {
   return prop.indexOf('x-sp-self_describing_event_') === 0;
 };
 
-/*
+/**
  * Returns whether a property name is a Snowplow context/entity property.
+ *
+ * @param {string} prop - The property name
+ * @returns {boolean}
  */
 const isSpContextsProp = (prop) => {
   return prop.indexOf('x-sp-contexts_') === 0;
@@ -1201,10 +1269,13 @@ const getReferenceIdx = (entity, refsList) => {
   return -1;
 };
 
-/*
+/**
  * Filters out invalid rules to avoid unintended behavior.
  * (e.g. version control being ignored if version num is not included in name)
  * Assumes that a rule contains 'key' and 'version' properties.
+ *
+ * @param {Object[]} rules - The provided rules
+ * @returns {Object[]} The valid rules
  */
 const cleanRules = (rules) => {
   const lastNumRexp = createRegex('[0-9]$');
@@ -1216,8 +1287,11 @@ const cleanRules = (rules) => {
   });
 };
 
-/*
+/**
  * Parses the entity exclusion rules from the tag configuration.
+ *
+ * @param {Object} tagConfig - The tag configuration
+ * @returns {Object[]}
  */
 const parseEntityExclusionRules = (tagConfig) => {
   const rules = tagConfig.entityExclusionRules;
@@ -1235,8 +1309,11 @@ const parseEntityExclusionRules = (tagConfig) => {
   return [];
 };
 
-/*
+/**
  * Parses the entity inclusion rules from the tag configuration.
+ *
+ * @param {Object} tagConfig - The tag configuration
+ * @returns {Object[]}
  */
 const parseEntityRules = (tagConfig) => {
   const rules = tagConfig.entityMappingRules;
@@ -1257,9 +1334,13 @@ const parseEntityRules = (tagConfig) => {
   return [];
 };
 
-/*
+/**
  * Given the inclusion rules and the excluded entity references,
  * returns the final entity mapping rules.
+ *
+ * @param {Object[]} inclusionRules - The rules about entities to include
+ * @param {string[]} excludedRefs - The entity references to be excluded
+ * @returns {Object[]} The final entity rules
  */
 const finalizeEntityRules = (inclusionRules, excludedRefs) => {
   const finalEntities = inclusionRules.filter((row) => {
@@ -1269,6 +1350,15 @@ const finalizeEntityRules = (inclusionRules, excludedRefs) => {
   return finalEntities;
 };
 
+/**
+ * Modifies the respective objects to populate according to Snowplow Event Context Rules.
+ *
+ * @param {Object} evData - The client event object
+ * @param {Object} tagConfig - The tag configuration object
+ * @param {Object} eventProperties - The object to populate as event properties
+ * @param {Object} userProperties - The object to populate as user properties
+ * @returns {undefined}
+ */
 const parseCustomEventAndEntities = (
   evData,
   tagConfig,
@@ -1314,13 +1404,13 @@ const parseCustomEventAndEntities = (
   }
 };
 
-/*
+/**
  * Initializes the user_properties of the Ampitude event
  * based on the User Property Rules of the tag configuration.
  *
- * @param evData {Object} - the client event object
- * @param tagConfig {Object} - the tag configuration
- * @returns - Object
+ * @param {Object} evData - The client event object
+ * @param {Object} tagConfig - The tag configuration
+ * @returns {Object}
  */
 const initUserData = (evData, tagConfig) => {
   // include common user properties
@@ -1344,13 +1434,13 @@ const initUserData = (evData, tagConfig) => {
   return merge([commonUserData, getEventDataByKeys(additionalUserProps)]);
 };
 
-/*
+/**
  * Returns the groups object (for Amplitude Accounts Add-on)
  * based on the Groups Property Rules configured.
  *
- * @param evData {Object} - the client event object
- * @param tagConfig {Object} - the tag configuration
- * @returns - Object
+ * @param {Object} evData - The client event object
+ * @param {Object} tagConfig - The tag configuration
+ * @returns {Object}
  */
 const makeGroupsProperties = (evData, tagConfig) => {
   const customRules = tagConfig.groupsMappingRules;
@@ -1371,12 +1461,12 @@ const makeGroupsProperties = (evData, tagConfig) => {
   return groupsData.custom || groupsData.additional;
 };
 
-/*
+/**
  * Returns the time property for Amplitude event
  * depending on time settings configured.
  *
- * @param tagConfig {Object} - the tag configuration object
- * @returns - unix timestamp or undefined
+ * @param {Object} tagConfig - The tag configuration object
+ * @returns {(integer|undefined)}
  */
 const getAmplitudeTime = (tagConfig) => {
   const timeSetting = tagConfig.amplitudeTime;
@@ -1403,12 +1493,12 @@ const getAmplitudeTime = (tagConfig) => {
   }
 };
 
-/*
+/**
  * Returns the session_id (long - unix timestamp) for Amplitude event
  * from the firstEventTimestamp of the client_session context.
  *
- * @param evData {Object} - the client event object
- * @returns - unix timestamp or undefined
+ * @param {Object} evData - The client event object
+ * @returns {(integer|undefined)}
  */
 const getAmplitudeSession = (evData) => {
   const clientSessionCtx =
