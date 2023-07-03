@@ -1096,27 +1096,6 @@ const getEventDataByKeys = (configProps) => {
 };
 
 /**
- * Replaces all occurences of a substring.
- *
- * @param {string} str - The string
- * @param {string} substring - The substring to replace
- * @param {string} newSubstr - The new substring to replace with
- * @returns {string}
- */
-const replaceAll = (str, substr, newSubstr) => {
-  let finished = false,
-    result = str;
-  while (!finished) {
-    const newStr = result.replace(substr, newSubstr);
-    if (result === newStr) {
-      finished = true;
-    }
-    result = newStr;
-  }
-  return result;
-};
-
-/**
  * Returns whether a string is upper case.
  *
  * @param {string} value - The string to check
@@ -1178,15 +1157,11 @@ const parseSchemaToMajorKeyValue = (schema) => {
   if (schema.indexOf('x-sp-contexts_') === 0) return schema;
   if (schema.indexOf('contexts_') === 0) return 'x-sp-' + schema;
   if (schema.indexOf('iglu:') === 0) {
-    let fixed = replaceAll(
-      replaceAll(
-        schema.replace('iglu:', '').replace('jsonschema/', ''),
-        '.',
-        '_'
-      ),
-      '/',
-      '_'
-    );
+    const rexp = createRegex('[./]', 'g');
+    let fixed = schema
+      .replace('iglu:', '')
+      .replace('jsonschema/', '')
+      .replace(rexp, '_');
 
     for (let i = 0; i < 2; i++) {
       fixed = fixed.substring(0, fixed.lastIndexOf('-'));
