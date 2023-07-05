@@ -22,6 +22,8 @@ This Tag reads event data from the "Common Event Data" specified in the [Google 
 
 ## Installation
 
+_The server Docker image must be 2.0.0 or later._
+
 ### Installing from the Google Tag Manager Gallery
 
 1. From the Templates tab in GTM Server Side, click “Search Gallery” in the Tag Templates section

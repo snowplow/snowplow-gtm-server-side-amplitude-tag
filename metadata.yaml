@@ -2,11 +2,16 @@ homepage: "https://www.snowplow.io"
 documentation: "https://docs.snowplow.io/docs/forwarding-events-to-destinations/forwarding-events/google-tag-manager-server-side/amplitude-tag-for-gtm-ss"
 versions:
   # Latest version
+  - sha: 3848c79b76e74f051070235ba34e213a65e45782
+    changeNotes: |2
+      Switch to using createRegex (#39)
+      Make function descriptions consistent with JSDoc (#38)
+      Fix version free entity matching (#37)
+  # Older versions
   - sha: f85be1c5bf8e922b8479aaca6a00781cc41bef70
     changeNotes: |2
       Extend yamllint rules in CI workflow (#33)
       Allow setting groups properties from variable (#34)
-  # Older versions
   - sha: b3be0dbb4b988f6eb4d773d01f2fd0b2e978f056
     changeNotes: |2
       Update copyright to 2023 (#30)
